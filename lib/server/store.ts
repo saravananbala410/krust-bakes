@@ -1,0 +1,495 @@
+import { env } from "cloudflare:workers";
+import { z } from "zod";
+import {
+  ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, slug,
+  type AdminAction, type AdminData, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
+} from "@/lib/store-core";
+import type { Product } from "@/lib/types";
+
+export class HttpError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+type AdminRecord = AdminUser & { passwordHash: string; salt: string };
+
+const SESSION_COOKIE = "krust_admin";
+const SESSION_DAYS = 7;
+const DEFAULT_ADMIN = { username: "admin", password: "krust2026", name: "Karenbir Singh Suri" };
+
+function database(): D1Database {
+  if (!env.DB) throw new HttpError(503, "Database binding `DB` is unavailable. Set \"d1\": \"DB\" in .openai/hosting.json and restart the dev server.");
+  return env.DB;
+}
+
+let schemaReady: Promise<void> | null = null;
+function ready() {
+  schemaReady ??= database().batch([
+    database().prepare("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, data TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, at TEXT NOT NULL, data TEXT NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, data TEXT NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, admin_id TEXT NOT NULL, expires_at INTEGER NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL)"),
+  ]).then(() => undefined).catch((error) => { schemaReady = null; throw error; });
+  return schemaReady;
+}
+
+const now = () => new Date().toISOString();
+
+// ---------- config (catalogue + content) ----------
+
+export async function getConfig(): Promise<PublicConfig> {
+  await ready();
+  const row = await database().prepare("SELECT value FROM kv WHERE key = 'config'").first<{ value: string }>();
+  const seed = seedConfig();
+  if (!row) {
+    await saveConfig(seed);
+    return seed;
+  }
+  const stored = JSON.parse(row.value) as Partial<PublicConfig>;
+  // Merge so fields added in later releases get their defaults.
+  return { ...seed, ...stored, settings: { ...seed.settings, ...stored.settings }, branding: { ...seed.branding, ...stored.branding }, socialLinks: { ...seed.socialLinks, ...stored.socialLinks }, story: { ...seed.story, ...stored.story } };
+}
+
+async function saveConfig(config: PublicConfig) {
+  await database().prepare("INSERT INTO kv (key, value, updated_at) VALUES ('config', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(config), now()).run();
+}
+
+// ---------- admins, passwords, sessions ----------
+
+async function sha256(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPassword(password: string, salt: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 100_000 }, key, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function listAdmins(): Promise<AdminRecord[]> {
+  await ready();
+  const { results } = await database().prepare("SELECT data FROM admins").all<{ data: string }>();
+  if (!results.length) {
+    const salt = crypto.randomUUID();
+    const root: AdminRecord = { id: "root-admin", name: DEFAULT_ADMIN.name, username: DEFAULT_ADMIN.username, role: "SUPER_ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(DEFAULT_ADMIN.password, salt) };
+    await writeAdmin(root);
+    return [root];
+  }
+  return results.map((r) => JSON.parse(r.data) as AdminRecord);
+}
+
+async function writeAdmin(admin: AdminRecord) {
+  await database().prepare("INSERT INTO admins (id, username, data) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET username = excluded.username, data = excluded.data").bind(admin.id, admin.username, JSON.stringify(admin)).run();
+}
+
+const publicAdmin = (admin: AdminRecord): AdminUser => ({ id: admin.id, name: admin.name, username: admin.username, role: admin.role, active: admin.active, createdAt: admin.createdAt });
+
+function readCookie(request: Request, name: string) {
+  const match = request.headers.get("cookie")?.split(/;\s*/).find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
+
+export async function login(request: Request, username: string, password: string) {
+  const admins = await listAdmins();
+  const admin = admins.find((a) => a.username.toLowerCase() === username.trim().toLowerCase());
+  if (!admin || !admin.active || (await hashPassword(password, admin.salt)) !== admin.passwordHash) throw new HttpError(401, "Invalid user ID or password");
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+  const expires = Date.now() + SESSION_DAYS * 86_400_000;
+  await database().batch([
+    database().prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()),
+    database().prepare("INSERT INTO sessions (token_hash, admin_id, expires_at) VALUES (?, ?, ?)").bind(await sha256(token), admin.id, expires),
+  ]);
+  await logAudit(admin.name, "Signed in", admin.username, "Admin session started");
+  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  return { user: publicAdmin(admin), cookie: `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}` };
+}
+
+export async function logout(request: Request) {
+  const token = readCookie(request, SESSION_COOKIE);
+  if (token) { await ready(); await database().prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(token)).run(); }
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+export async function currentAdmin(request: Request): Promise<AdminRecord | null> {
+  const token = readCookie(request, SESSION_COOKIE);
+  if (!token) return null;
+  await ready();
+  const session = await database().prepare("SELECT admin_id, expires_at FROM sessions WHERE token_hash = ?").bind(await sha256(token)).first<{ admin_id: string; expires_at: number }>();
+  if (!session || session.expires_at < Date.now()) return null;
+  const admin = (await listAdmins()).find((a) => a.id === session.admin_id);
+  return admin?.active ? admin : null;
+}
+
+export async function requireAdmin(request: Request) {
+  const admin = await currentAdmin(request);
+  if (!admin) throw new HttpError(401, "Please sign in again");
+  return admin;
+}
+
+export const toPublicAdmin = publicAdmin;
+
+// ---------- orders, audit ----------
+
+async function logAudit(actor: string, action: string, entity: string, detail: string) {
+  const entry: AuditEntry = { id: crypto.randomUUID(), at: now(), actor, action, entity, detail };
+  await database().prepare("INSERT INTO audit (id, at, data) VALUES (?, ?, ?)").bind(entry.id, entry.at, JSON.stringify(entry)).run();
+}
+
+async function readOrder(id: string) {
+  const row = await database().prepare("SELECT data, deleted FROM orders WHERE id = ?").bind(id).first<{ data: string; deleted: number }>();
+  return row ? { order: JSON.parse(row.data) as StoreOrder, deleted: row.deleted === 1 } : null;
+}
+
+async function writeOrder(order: StoreOrder, deleted: boolean) {
+  await database().prepare("INSERT INTO orders (id, data, deleted, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted").bind(order.id, JSON.stringify(order), deleted ? 1 : 0, order.createdAt).run();
+}
+
+export async function getAdminData(): Promise<AdminData> {
+  await ready();
+  const [orders, audit, admins] = await Promise.all([
+    database().prepare("SELECT data, deleted FROM orders ORDER BY created_at DESC").all<{ data: string; deleted: number }>(),
+    database().prepare("SELECT data FROM audit ORDER BY at DESC LIMIT 1500").all<{ data: string }>(),
+    listAdmins(),
+  ]);
+  const parsed = orders.results.map((r) => ({ order: JSON.parse(r.data) as StoreOrder, deleted: r.deleted === 1 }));
+  return {
+    orders: parsed.filter((r) => !r.deleted).map((r) => r.order),
+    recycleBin: parsed.filter((r) => r.deleted).map((r) => r.order),
+    audit: audit.results.map((r) => JSON.parse(r.data) as AuditEntry),
+    admins: admins.map(publicAdmin),
+  };
+}
+
+const phone = z.string().trim().regex(/^\+?[0-9\s-]{10,16}$/, "Enter a valid phone number");
+const placeOrderSchema = z.object({
+  customer: z.string().trim().min(2).max(100),
+  phone,
+  whatsapp: z.union([phone, z.literal("")]).optional(),
+  email: z.union([z.string().trim().email(), z.literal("")]).optional(),
+  address: z.string().trim().min(8).max(500),
+  landmark: z.string().trim().max(120).optional(),
+  pincode: z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a valid 6-digit pincode"),
+  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  slot: z.string().trim().min(3).max(60),
+  paymentMethod: z.enum(["ONLINE", "UPI", "PAY_ON_DELIVERY"]),
+  note: z.string().trim().max(500).optional(),
+  lines: z.array(z.object({ productId: z.string(), variantId: z.string(), quantity: z.number().int().min(1).max(100) })).min(1).max(60),
+});
+
+export async function placeOrder(input: PlaceOrderInput) {
+  const parsed = placeOrderSchema.safeParse(input);
+  if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid order");
+  const data = parsed.data;
+  const config = await getConfig();
+  const activeCategories = new Set(config.categories.filter((c) => c.active).map((c) => c.name));
+  // Price from the server catalogue, never from the client.
+  const lines = data.lines.map((line) => {
+    const product = config.products.find((p) => p.id === line.productId);
+    const variant = product?.variants.find((v) => v.id === line.variantId);
+    if (!product || !variant || product.active === false || !activeCategories.has(product.category)) throw new HttpError(409, "An item in your basket is no longer available. Please refresh and try again.");
+    return { productId: product.id, productName: product.name, variantName: variant.name, hsn: product.hsn, quantity: line.quantity, unitPrice: variant.price, gstRate: product.gstRate };
+  });
+  const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  if (subtotal < config.settings.minimumOrder) throw new HttpError(422, `Minimum delivery order is ₹${config.settings.minimumOrder}`);
+  const seq = await database().prepare("INSERT INTO kv (key, value, updated_at) VALUES ('orderSeq', '1051', ?) ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1, updated_at = excluded.updated_at RETURNING value").bind(now()).first<{ value: string }>();
+  const order: StoreOrder = {
+    id: `KA-${seq?.value ?? Date.now()}`, token: crypto.randomUUID().replaceAll("-", ""),
+    customer: data.customer, phone: data.phone, whatsapp: data.whatsapp || data.phone, email: data.email || undefined,
+    address: [data.address, data.landmark].filter(Boolean).join(", "), pincode: data.pincode,
+    deliveryDate: data.deliveryDate, slot: data.slot, total: subtotal + config.settings.deliveryFee, items: lines.reduce((s, l) => s + l.quantity, 0),
+    status: "PENDING", paymentMethod: data.paymentMethod, paymentStatus: "PENDING", createdAt: now(), lines, customerNote: data.note || undefined,
+  };
+  await writeOrder(order, false);
+  await logAudit("Customer", "Customer order placed", order.id, `${order.customer} · ₹${order.total} · ${order.paymentMethod}`);
+  return order;
+}
+
+export async function getOrderForInvoice(request: Request, id: string, token: string | null) {
+  await ready();
+  const found = await readOrder(id);
+  if (!found) throw new HttpError(404, "Order not found");
+  if (found.order.token !== token && !(await currentAdmin(request))) throw new HttpError(403, "This invoice link is not valid");
+  const config = await getConfig();
+  return { order: found.order, settings: config.settings, branding: config.branding };
+}
+
+// ---------- assets (uploaded images) ----------
+
+export async function saveAsset(admin: AdminRecord, mime: string, base64: string) {
+  if (!/^image\/(png|jpe?g|webp|gif)$/.test(mime)) throw new HttpError(415, "Only image uploads are allowed");
+  if (base64.length > 2_000_000) throw new HttpError(413, "Image is too large. Please use one under 1.5 MB.");
+  await ready();
+  const id = crypto.randomUUID();
+  await database().prepare("INSERT INTO assets (id, mime, data, created_at) VALUES (?, ?, ?, ?)").bind(id, mime, base64, now()).run();
+  await logAudit(admin.name, "Image uploaded", id, mime);
+  return `/api/assets/${id}`;
+}
+
+export async function readAsset(id: string) {
+  await ready();
+  return database().prepare("SELECT mime, data FROM assets WHERE id = ?").bind(id).first<{ mime: string; data: string }>();
+}
+
+// ---------- admin actions ----------
+
+const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
+
+function cleanProduct(p: Product, config: PublicConfig): Product {
+  const name = text(p.name, 120);
+  if (!name) throw new HttpError(400, "Product name is required");
+  if (!config.categories.some((c) => c.name === p.category)) throw new HttpError(400, "Choose a valid category");
+  const variants = (p.variants ?? []).map((v) => ({ id: text(v.id, 60) || crypto.randomUUID(), name: text(v.name, 60) || "Standard", price: Math.max(0, Math.round(Number(v.price) * 100) / 100) })).filter((v) => Number.isFinite(v.price));
+  if (!variants.length) throw new HttpError(400, "Add at least one size and price");
+  const gstRate = Number(p.gstRate);
+  if (!config.settings.gstRates.includes(gstRate)) throw new HttpError(400, "Choose a configured GST rate");
+  return { id: text(p.id, 80) || crypto.randomUUID(), name, description: text(p.description, 400), category: p.category, eggless: !!p.eggless, hsn: text(p.hsn, 12) || "1905", gstRate, accent: text(p.accent, 20) || "#f6c9c9", crop: text(p.crop, 30) || "50% 50%", imageUrl: text(p.imageUrl, 300) || "/brand/krust-hero.png", active: p.active !== false, featured: !!p.featured, variants };
+}
+
+function upsert<T extends { id: string }>(list: T[], item: T) {
+  return list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
+}
+
+export async function runAction(admin: AdminRecord, action: AdminAction) {
+  const log = (what: string, entity: string, detail: string) => logAudit(admin.name, what, entity, detail);
+  const superOnly = () => { if (admin.role !== "SUPER_ADMIN") throw new HttpError(403, "Only the main super admin can manage admin users"); };
+
+  if (action.type.startsWith("order.") || action.type === "recycle.empty") {
+    await ready();
+    switch (action.type) {
+      case "order.update": {
+        const found = await readOrder(action.id);
+        if (!found) throw new HttpError(404, "Order not found");
+        const patch: Partial<StoreOrder> = {};
+        if (action.patch.status !== undefined) { if (!ORDER_STATUSES.includes(action.patch.status as never)) throw new HttpError(400, "Unknown status"); patch.status = action.patch.status; }
+        if (action.patch.paymentStatus !== undefined) { if (!PAYMENT_STATUSES.includes(action.patch.paymentStatus as never)) throw new HttpError(400, "Unknown payment status"); patch.paymentStatus = action.patch.paymentStatus; }
+        if (action.patch.note !== undefined) patch.note = text(action.patch.note, 1000);
+        const changes = Object.entries(patch).filter(([k, v]) => found.order[k as keyof StoreOrder] !== v).map(([k, v]) => `${k}: ${found.order[k as keyof StoreOrder] ?? "—"} → ${v}`);
+        await writeOrder({ ...found.order, ...patch, updatedAt: now() }, found.deleted);
+        if (changes.length) await log("Order updated", action.id, changes.join(" · "));
+        return;
+      }
+      case "order.recycle": case "order.restore": {
+        const found = await readOrder(action.id);
+        if (!found) throw new HttpError(404, "Order not found");
+        const toBin = action.type === "order.recycle";
+        await writeOrder({ ...found.order, deletedAt: toBin ? now() : undefined }, toBin);
+        await log(toBin ? "Order moved to recycle bin" : "Order restored", action.id, `${found.order.customer} · ₹${found.order.total}`);
+        return;
+      }
+      case "order.purge": {
+        const found = await readOrder(action.id);
+        if (!found?.deleted) throw new HttpError(400, "Only orders in the recycle bin can be deleted permanently");
+        await database().prepare("DELETE FROM orders WHERE id = ? AND deleted = 1").bind(action.id).run();
+        await log("Order permanently deleted", action.id, `${found.order.customer} · ₹${found.order.total}`);
+        return;
+      }
+      case "recycle.empty": {
+        const { meta } = await database().prepare("DELETE FROM orders WHERE deleted = 1").run();
+        await log("Recycle bin emptied", "Orders", `${meta.changes ?? 0} order(s) permanently deleted`);
+        return;
+      }
+    }
+  }
+
+  if (action.type.startsWith("admin.")) {
+    const admins = await listAdmins();
+    switch (action.type) {
+      case "admin.create": {
+        superOnly();
+        const username = text(action.username, 40).toLowerCase();
+        if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new HttpError(400, "User ID must be 3–40 letters, numbers, dots or dashes");
+        if (admins.some((a) => a.username.toLowerCase() === username)) throw new HttpError(409, "That user ID already exists");
+        if (String(action.password).length < 8) throw new HttpError(400, "Password must be at least 8 characters");
+        const salt = crypto.randomUUID();
+        await writeAdmin({ id: crypto.randomUUID(), name: text(action.name, 80) || username, username, role: action.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(action.password, salt) });
+        await log("Admin created", username, action.role);
+        return;
+      }
+      case "admin.update": {
+        superOnly();
+        const target = admins.find((a) => a.id === action.id);
+        if (!target) throw new HttpError(404, "Admin not found");
+        if (target.id === "root-admin" && (action.active === false || action.role === "ADMIN")) throw new HttpError(400, "The main super admin cannot be disabled or demoted");
+        const next = { ...target };
+        const details: string[] = [];
+        if (action.active !== undefined) { next.active = action.active; details.push(action.active ? "Enabled" : "Disabled"); }
+        if (action.role) { next.role = action.role; details.push(`Role ${action.role}`); }
+        if (action.password) {
+          if (action.password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
+          next.salt = crypto.randomUUID(); next.passwordHash = await hashPassword(action.password, next.salt); details.push("Password reset");
+          await database().prepare("DELETE FROM sessions WHERE admin_id = ?").bind(target.id).run();
+        }
+        if (action.active === false) await database().prepare("DELETE FROM sessions WHERE admin_id = ?").bind(target.id).run();
+        await writeAdmin(next);
+        await log("Admin updated", target.username, details.join(" · "));
+        return;
+      }
+      case "admin.delete": {
+        superOnly();
+        if (action.id === "root-admin" || action.id === admin.id) throw new HttpError(400, "You cannot delete the main super admin or yourself");
+        const target = admins.find((a) => a.id === action.id);
+        await database().batch([database().prepare("DELETE FROM admins WHERE id = ?").bind(action.id), database().prepare("DELETE FROM sessions WHERE admin_id = ?").bind(action.id)]);
+        await log("Admin deleted", target?.username ?? action.id, "Account removed");
+        return;
+      }
+      case "admin.changeOwnPassword": {
+        if ((await hashPassword(action.current, admin.salt)) !== admin.passwordHash) throw new HttpError(400, "Current password is incorrect");
+        if (String(action.next).length < 8) throw new HttpError(400, "New password must be at least 8 characters");
+        const salt = crypto.randomUUID();
+        await writeAdmin({ ...admin, salt, passwordHash: await hashPassword(action.next, salt) });
+        await log("Password changed", admin.username, "Own password updated");
+        return;
+      }
+    }
+  }
+
+  const config = await getConfig();
+  let next: PublicConfig = config;
+  let entry: [string, string, string];
+  switch (action.type) {
+    case "product.save": {
+      const product = cleanProduct(action.product, config);
+      const existing = config.products.find((p) => p.id === product.id);
+      next = { ...config, products: existing ? config.products.map((p) => (p.id === product.id ? product : p)) : [product, ...config.products] };
+      const diff = existing ? (["name", "category", "gstRate", "hsn", "active", "description", "imageUrl", "eggless", "featured"] as const).filter((k) => existing[k] !== product[k]).concat(JSON.stringify(existing.variants) !== JSON.stringify(product.variants) ? ["variants" as never] : []) : [];
+      entry = [existing ? "Product updated" : "Product created", product.name, existing ? (diff.length ? `Changed ${diff.join(", ")}` : "Saved without changes") : `${product.category} · GST ${product.gstRate}% · ${product.variants.map((v) => `${v.name} ₹${v.price}`).join(", ")}`];
+      break;
+    }
+    case "product.delete": {
+      const item = config.products.find((p) => p.id === action.id);
+      next = { ...config, products: config.products.filter((p) => p.id !== action.id) };
+      entry = ["Product deleted", item?.name ?? action.id, "Removed from catalogue"];
+      break;
+    }
+    case "category.add": {
+      const name = text(action.name, 60);
+      if (!name) throw new HttpError(400, "Category name is required");
+      if (config.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) throw new HttpError(409, "That category already exists");
+      next = { ...config, categories: [...config.categories, { id: `${slug(name)}-${Date.now().toString(36)}`, name, active: true }] };
+      entry = ["Category created", name, "Visible on storefront"];
+      break;
+    }
+    case "category.update": {
+      const cat = config.categories.find((c) => c.id === action.id);
+      if (!cat) throw new HttpError(404, "Category not found");
+      const name = action.name !== undefined ? text(action.name, 60) : cat.name;
+      if (!name) throw new HttpError(400, "Category name is required");
+      if (name !== cat.name && config.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) throw new HttpError(409, "That category already exists");
+      const active = action.active ?? cat.active;
+      next = { ...config, categories: config.categories.map((c) => (c.id === cat.id ? { ...c, name, active } : c)), products: name !== cat.name ? config.products.map((p) => (p.category === cat.name ? { ...p, category: name } : p)) : config.products };
+      entry = ["Category updated", name, [name !== cat.name && `Renamed from ${cat.name}`, active !== cat.active && (active ? "Turned on" : "Turned off")].filter(Boolean).join(" · ") || "No changes"];
+      break;
+    }
+    case "category.delete": {
+      const cat = config.categories.find((c) => c.id === action.id);
+      if (!cat) throw new HttpError(404, "Category not found");
+      const count = config.products.filter((p) => p.category === cat.name).length;
+      if (count) throw new HttpError(409, `Move or delete the ${count} product(s) in “${cat.name}” first`);
+      next = { ...config, categories: config.categories.filter((c) => c.id !== cat.id) };
+      entry = ["Category deleted", cat.name, "Removed"];
+      break;
+    }
+    case "settings.update": {
+      const p = action.patch;
+      const settings = { ...config.settings };
+      if (p.minimumOrder !== undefined) settings.minimumOrder = Math.max(0, Number(p.minimumOrder) || 0);
+      if (p.deliveryFee !== undefined) settings.deliveryFee = Math.max(0, Number(p.deliveryFee) || 0);
+      if (p.gstRates !== undefined) {
+        const rates = [...new Set(p.gstRates.map(Number).filter((r) => Number.isFinite(r) && r >= 0 && r <= 40))].sort((a, b) => a - b);
+        const inUse = [...new Set(config.products.map((x) => x.gstRate))].filter((r) => !rates.includes(r));
+        if (inUse.length) throw new HttpError(409, `GST ${inUse.join("%, ")}% is still used by products. Change those products first.`);
+        settings.gstRates = rates;
+      }
+      if (p.gstin !== undefined) { const v = text(p.gstin, 15).toUpperCase(); if (v && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v)) throw new HttpError(400, "GSTIN format looks wrong (15 characters, e.g. 33ABCDE1234F1Z5)"); settings.gstin = v; }
+      if (p.fssai !== undefined) settings.fssai = text(p.fssai, 20);
+      if (p.legalName !== undefined) settings.legalName = text(p.legalName, 120);
+      if (p.placeOfSupply !== undefined) settings.placeOfSupply = text(p.placeOfSupply, 60);
+      next = { ...config, settings };
+      entry = ["Settings updated", "Store & GST", Object.keys(p).join(", ")];
+      break;
+    }
+    case "social.update": {
+      const links = Object.fromEntries(Object.entries(action.links).map(([k, v]) => [k, text(v, 300)])) as PublicConfig["socialLinks"];
+      for (const v of Object.values(links)) if (v && !/^https?:\/\//.test(v)) throw new HttpError(400, "Social links must start with https://");
+      next = { ...config, socialLinks: { ...config.socialLinks, ...links } };
+      entry = ["Social links updated", "Social", Object.keys(links).join(", ")];
+      break;
+    }
+    case "story.update": {
+      const s = action.story;
+      const team = (s.team ?? []).slice(0, 12).map((m) => ({ id: text(m.id, 80) || crypto.randomUUID(), name: text(m.name, 80), role: text(m.role, 80), photoUrl: text(m.photoUrl, 300) })).filter((m) => m.name);
+      next = { ...config, story: { eyebrow: text(s.eyebrow, 80), titleStart: text(s.titleStart, 120), titleAccent: text(s.titleAccent, 40), titleEnd: text(s.titleEnd, 120), paragraphs: text(s.paragraphs, 3000), imageUrl: text(s.imageUrl, 300) || "/brand/krust-hero.png", statValue: text(s.statValue, 12), statLabel: text(s.statLabel, 40), team } };
+      entry = ["Our story updated", "Story section", `${team.length} team member(s)`];
+      break;
+    }
+    case "branding.update": {
+      const patch = Object.fromEntries(Object.entries(action.patch).map(([k, v]) => [k, text(v, 600)]));
+      next = { ...config, branding: { ...config.branding, ...patch } };
+      entry = ["Branding updated", "Site content", Object.keys(patch).join(", ")];
+      break;
+    }
+    case "slide.save": {
+      const s = action.slide;
+      const slide = { id: text(s.id, 80) || crypto.randomUUID(), eyebrow: text(s.eyebrow, 60), title: text(s.title, 120), copy: text(s.copy, 400), imageUrl: text(s.imageUrl, 300) || "/brand/krust-hero.png", ctaLabel: text(s.ctaLabel, 40), active: s.active !== false };
+      if (!slide.title) throw new HttpError(400, "Slide wording is required");
+      const existed = config.slides.some((x) => x.id === slide.id);
+      next = { ...config, slides: upsert(config.slides, slide) };
+      entry = [existed ? "Carousel slide updated" : "Carousel slide created", slide.title, slide.active ? "Live on storefront" : "Hidden"];
+      break;
+    }
+    case "slide.delete": {
+      const s = config.slides.find((x) => x.id === action.id);
+      next = { ...config, slides: config.slides.filter((x) => x.id !== action.id) };
+      entry = ["Carousel slide deleted", s?.title ?? action.id, "Removed"];
+      break;
+    }
+    case "slide.move": {
+      const i = config.slides.findIndex((x) => x.id === action.id);
+      const j = i + action.direction;
+      if (i < 0 || j < 0 || j >= config.slides.length) return;
+      const slides = [...config.slides];
+      [slides[i], slides[j]] = [slides[j], slides[i]];
+      next = { ...config, slides };
+      entry = ["Carousel reordered", slides[j].title, `Moved to position ${j + 1}`];
+      break;
+    }
+    case "testimonial.save": {
+      const t = action.item;
+      const item = { id: text(t.id, 80) || crypto.randomUUID(), name: text(t.name, 80), role: text(t.role, 80), quote: text(t.quote, 500), active: t.active !== false };
+      if (!item.name || !item.quote) throw new HttpError(400, "Name and quote are required");
+      next = { ...config, testimonials: upsert(config.testimonials, item) };
+      entry = ["Testimonial saved", item.name, item.active ? "Visible" : "Hidden"];
+      break;
+    }
+    case "testimonial.delete": {
+      next = { ...config, testimonials: config.testimonials.filter((x) => x.id !== action.id) };
+      entry = ["Testimonial deleted", action.id, "Removed"];
+      break;
+    }
+    case "faq.save": {
+      const f = action.item;
+      const item = { id: text(f.id, 80) || crypto.randomUUID(), question: text(f.question, 200), answer: text(f.answer, 800), active: f.active !== false };
+      if (!item.question || !item.answer) throw new HttpError(400, "Question and answer are required");
+      next = { ...config, faqs: upsert(config.faqs, item) };
+      entry = ["FAQ saved", item.question, item.active ? "Visible" : "Hidden"];
+      break;
+    }
+    case "faq.delete": {
+      next = { ...config, faqs: config.faqs.filter((x) => x.id !== action.id) };
+      entry = ["FAQ deleted", action.id, "Removed"];
+      break;
+    }
+    default:
+      throw new HttpError(400, "Unknown action");
+  }
+  await saveConfig(next);
+  await log(...entry);
+}
+
+export function errorResponse(error: unknown) {
+  if (error instanceof HttpError) return Response.json({ error: error.message }, { status: error.status });
+  console.error(error);
+  return Response.json({ error: error instanceof Error ? error.message : "Unexpected error" }, { status: 500 });
+}

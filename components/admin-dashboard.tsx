@@ -91,7 +91,13 @@ function BrandBlock({ onClose }: { onClose: () => void }) {
 function SessionCard({ me }: { me: AdminUser }) {
   const logout = useAppStore((s) => s.logout);
   const [passwordOpen, setPasswordOpen] = useState(false);
-  return <div className="absolute inset-x-3 bottom-4 rounded-2xl border border-petal bg-blush/60 p-3"><div className="flex items-center gap-2"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-krust text-xs font-extrabold text-white">{me.name.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-xs font-extrabold">{me.name}</p><p className="text-[9px] font-extrabold uppercase tracking-wider text-krust">{ROLE_LABELS[me.role]}</p></div><button onClick={() => setPasswordOpen(true)} aria-label="Change password" title="Change password" className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-krust hover:bg-white"><KeyRound size={15} /></button><button onClick={() => void logout()} aria-label="Sign out" title="Sign out" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-krust hover:bg-white"><LogOut size={15} /></button></div>{passwordOpen && <Drawer title="Change my password" onClose={() => setPasswordOpen(false)}><PasswordForm onDone={() => setPasswordOpen(false)} /></Drawer>}</div>;
+  return <div className="absolute inset-x-3 bottom-4 rounded-2xl border border-petal bg-blush/60 p-3"><div className="flex items-center gap-2"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-krust text-xs font-extrabold text-white">{me.name.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-xs font-extrabold">{me.name}</p><p className="text-[9px] font-extrabold uppercase tracking-wider text-krust">{ROLE_LABELS[me.role]}</p></div><button onClick={() => setPasswordOpen(true)} aria-label="My account" title="My account: name, user ID, password" className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-krust hover:bg-white"><KeyRound size={15} /></button><button onClick={() => void logout()} aria-label="Sign out" title="Sign out" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-krust hover:bg-white"><LogOut size={15} /></button></div>{passwordOpen && <Drawer title="My account" onClose={() => setPasswordOpen(false)}><ProfileForm me={me} /><div className="gold-rule my-8" /><h3 className="mb-4 text-xl">Change password</h3><PasswordForm onDone={() => setPasswordOpen(false)} /></Drawer>}</div>;
+}
+
+function ProfileForm({ me }: { me: AdminUser }) {
+  const run = useDispatch();
+  const [form, setForm] = useState({ name: me.name, username: me.username, current: "" });
+  return <form onSubmit={(e) => { e.preventDefault(); void run({ type: "admin.updateOwnProfile", ...form }, "Account details saved").then((ok) => ok && setForm((f) => ({ ...f, current: "" }))); }} className="grid gap-4"><h3 className="text-xl">Name &amp; user ID</h3><Field label="Display name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /><Field label="User ID (used to sign in)" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required pattern="[a-zA-Z0-9._-]{3,40}" autoComplete="username" /><Field label="Current password (to confirm)" type="password" autoComplete="current-password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })} required /><button className="action w-fit"><Check size={15} /> Save account details</button></form>;
 }
 
 function PasswordForm({ onDone }: { onDone?: () => void }) {
@@ -487,13 +493,36 @@ function SocialLinksPanel() {
   </div>;
 }
 
+function GoogleLoginPanel() {
+  const saved = useAppStore((s) => s.config.settings.googleClientId);
+  const run = useDispatch();
+  const [clientId, setClientId] = useState(saved);
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return <Panel title="Customer Google login">
+    <div className="mb-4 flex items-center gap-2"><span className={`badge ${saved ? "bg-mint text-[#2f7a4a]" : "bg-butter text-[#8a5a13]"}`}>{saved ? "Active on storefront" : "Not set up"}</span></div>
+    <form onSubmit={(e) => { e.preventDefault(); void run({ type: "settings.update", patch: { googleClientId: clientId.trim() } }, clientId.trim() ? "Google login enabled" : "Google login turned off"); }} className="space-y-3">
+      <Field label="Google OAuth Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="1234567890-abc123.apps.googleusercontent.com" />
+      <button className="action"><Check size={15} /> Save</button>
+    </form>
+    <details className="mt-4 rounded-xl bg-cream p-4 text-xs leading-6 text-cocoa"><summary className="cursor-pointer font-extrabold text-ink">How to get a Client ID (free)</summary><ol className="mt-2 list-decimal space-y-1 pl-5">
+      <li>Open <b>console.cloud.google.com</b> and create a project (e.g. &ldquo;Krust website&rdquo;).</li>
+      <li>Go to <b>APIs &amp; Services → OAuth consent screen</b>, choose <b>External</b>, fill in the app name and your email, and publish it.</li>
+      <li>Go to <b>Credentials → Create credentials → OAuth client ID</b>, type <b>Web application</b>.</li>
+      <li>Under <b>Authorised JavaScript origins</b> add <b>{origin || "your site address"}</b>{origin.includes("127.0.0.1") && <> and <b>http://localhost:5173</b></>} (and your live site address later).</li>
+      <li>Click Create, copy the <b>Client ID</b> and paste it above.</li>
+    </ol></details>
+  </Panel>;
+}
+
 function StoreSettingsPanel() {
   const settings = useAppStore((s) => s.config.settings);
   const run = useDispatch();
   const [min, setMin] = useState(settings.minimumOrder);
   const [fee, setFee] = useState(settings.deliveryFee);
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const isDev = useAppStore((s) => s.me?.role === "DEV_ADMIN");
   return <div className="max-w-3xl space-y-5">
+    {isDev && <GoogleLoginPanel />}
     <Header title="Settings" copy="Ordering rules and your own account security." />
     <Panel title="Ordering"><form onSubmit={(e) => { e.preventDefault(); void run({ type: "settings.update", patch: { minimumOrder: min, deliveryFee: fee } }, "Ordering settings saved"); }} className="grid gap-4 sm:grid-cols-2"><Field label="Minimum delivery order (₹)" type="number" min={0} value={min} onChange={(e) => setMin(Number(e.target.value))} /><Field label="Delivery fee (₹)" type="number" min={0} value={fee} onChange={(e) => setFee(Number(e.target.value))} /><button className="action sm:col-span-2 sm:w-fit"><Check size={15} /> Save</button></form></Panel>
     <Panel title="Change my password"><form onSubmit={(e) => { e.preventDefault(); if (pw.next !== pw.confirm) return void toast.error("New passwords do not match"); void run({ type: "admin.changeOwnPassword", current: pw.current, next: pw.next }, "Password changed").then((ok) => ok && setPw({ current: "", next: "", confirm: "" })); }} className="grid gap-4 sm:grid-cols-3"><Field label="Current password" type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required /><Field label="New password" type="password" autoComplete="new-password" minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required /><Field label="Confirm new password" type="password" autoComplete="new-password" minLength={8} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required /><button className="action sm:col-span-3 sm:w-fit"><KeyRound size={15} /> Update password</button></form></Panel>

@@ -8,7 +8,7 @@ export const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED"] as con
 export type StoreOrder = {
   id: string; token: string; customer: string; phone: string; whatsapp: string; email?: string; address: string; pincode?: string;
   deliveryDate?: string; slot: string; total: number; items: number; status: string; paymentMethod: string; paymentStatus: string;
-  createdAt: string; updatedAt?: string; deletedAt?: string; lines: OrderLine[]; note?: string; customerNote?: string;
+  createdAt: string; updatedAt?: string; deletedAt?: string; customerId?: string; lines: OrderLine[]; note?: string; customerNote?: string;
 };
 export type AuditEntry = { id: string; at: string; actor: string; actorRole?: AdminRole | "CUSTOMER"; action: string; entity: string; detail: string };
 /** DEV_ADMIN: head of the site, full access. SUPER_ADMIN: business owner view. SALES_ADMIN: orders and payments only. */
@@ -36,7 +36,7 @@ export type Story = {
   eyebrow: string; titleStart: string; titleAccent: string; titleEnd: string; paragraphs: string;
   imageUrl: string; statValue: string; statLabel: string; team: TeamMember[];
 };
-export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRates: number[]; gstin: string; fssai: string; legalName: string; placeOfSupply: string };
+export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRates: number[]; gstin: string; fssai: string; legalName: string; placeOfSupply: string; googleClientId: string };
 
 /** Catalogue and site content: everything a storefront visitor may read. */
 export type PublicConfig = {
@@ -44,6 +44,9 @@ export type PublicConfig = {
   settings: StoreSettings; socialLinks: SocialLinks; branding: Branding; story: Story;
 };
 /** Admin-only operational data, loaded after sign-in. */
+/** A shopper signed in with Google. */
+export type Customer = { id: string; email: string; name: string; picture?: string; phone?: string; createdAt: string; lastLoginAt: string };
+export type CustomerOrder = Pick<StoreOrder, "id" | "token" | "createdAt" | "deliveryDate" | "status" | "paymentStatus" | "paymentMethod" | "total" | "items" | "lines" | "address">;
 export type AdminData = { orders: StoreOrder[]; recycleBin: StoreOrder[]; audit: AuditEntry[]; admins: AdminUser[] };
 
 export type PlaceOrderInput = {
@@ -77,7 +80,8 @@ export type AdminAction =
   | { type: "admin.create"; name: string; username: string; password: string; role: AdminUser["role"] }
   | { type: "admin.update"; id: string; active?: boolean; role?: AdminUser["role"]; password?: string }
   | { type: "admin.delete"; id: string }
-  | { type: "admin.changeOwnPassword"; current: string; next: string };
+  | { type: "admin.changeOwnPassword"; current: string; next: string }
+  | { type: "admin.updateOwnProfile"; current: string; name: string; username: string };
 
 export function seedConfig(): PublicConfig {
   return {
@@ -105,7 +109,7 @@ export function seedConfig(): PublicConfig {
       imageUrl: "/brand/krust-hero.png", statValue: "16+", statLabel: "Years at the bench",
       team: [{ id: "founder", name: "Karenbir Singh Suri", role: "Founder & Master Chef", photoUrl: "" }],
     },
-    settings: { minimumOrder: 750, deliveryFee: 0, gstRates: [0, 5, 18], gstin: "", fssai: "", legalName: "Krust Artisan Bakes", placeOfSupply: "Tamil Nadu (33)" },
+    settings: { minimumOrder: 750, deliveryFee: 0, gstRates: [0, 5, 18], gstin: "", fssai: "", legalName: "Krust Artisan Bakes", placeOfSupply: "Tamil Nadu (33)", googleClientId: "" },
     socialLinks: { instagram: "https://instagram.com/", facebook: "https://facebook.com/", twitter: "https://x.com/", whatsapp: "https://wa.me/919840477330" },
     branding: {
       storeName: "Krust Artisan Bakes", tagline: "Where baking is a passion", logoUrl: "/brand/krust-mark.png", wordmarkUrl: "/brand/krust-wordmark.png",

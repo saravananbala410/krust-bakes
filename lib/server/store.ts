@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, slug,
-  type AdminAction, type AdminData, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
+  type AdminAction, type AdminData, type Customer, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
 } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
 
@@ -14,15 +14,15 @@ type AdminRecord = AdminUser & { passwordHash: string; salt: string };
 
 const SESSION_COOKIE = "krust_admin";
 const SESSION_DAYS = 7;
-const DEFAULT_ADMIN = { username: "admin", password: "krust2026", name: "Karenbir Singh Suri" };
+const DEFAULT_ADMIN = { username: "admin", password: "krust@2026", name: "Jinu" };
 
-function database(): D1Database {
+export function database(): D1Database {
   if (!env.DB) throw new HttpError(503, "Database binding `DB` is unavailable. Set \"d1\": \"DB\" in .openai/hosting.json and restart the dev server.");
   return env.DB;
 }
 
 let schemaReady: Promise<void> | null = null;
-function ready() {
+export function ready() {
   schemaReady ??= database().batch([
     database().prepare("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)"),
     database().prepare("CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, data TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
@@ -30,7 +30,13 @@ function ready() {
     database().prepare("CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, data TEXT NOT NULL)"),
     database().prepare("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, admin_id TEXT NOT NULL, expires_at INTEGER NOT NULL)"),
     database().prepare("CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL)"),
-  ]).then(() => undefined).catch((error) => { schemaReady = null; throw error; });
+    database().prepare("CREATE TABLE IF NOT EXISTS customers (id TEXT PRIMARY KEY, email TEXT NOT NULL, data TEXT NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS customer_sessions (token_hash TEXT PRIMARY KEY, customer_id TEXT NOT NULL, expires_at INTEGER NOT NULL)"),
+  ]).then(async () => {
+    // Orders created before customer accounts existed lack this column; adding it again fails harmlessly.
+    await database().prepare("ALTER TABLE orders ADD COLUMN customer_id TEXT").run().catch(() => undefined);
+    await database().prepare("CREATE INDEX IF NOT EXISTS orders_customer ON orders (customer_id)").run();
+  }).catch((error) => { schemaReady = null; throw error; });
   return schemaReady;
 }
 
@@ -57,7 +63,7 @@ async function saveConfig(config: PublicConfig) {
 
 // ---------- admins, passwords, sessions ----------
 
-async function sha256(value: string) {
+export async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -95,7 +101,7 @@ async function writeAdmin(admin: AdminRecord) {
 
 const publicAdmin = (admin: AdminRecord): AdminUser => ({ id: admin.id, name: admin.name, username: admin.username, role: admin.role, active: admin.active, createdAt: admin.createdAt });
 
-function readCookie(request: Request, name: string) {
+export function readCookie(request: Request, name: string) {
   const match = request.headers.get("cookie")?.split(/;\s*/).find((part) => part.startsWith(`${name}=`));
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 }
@@ -141,7 +147,7 @@ export const toPublicAdmin = publicAdmin;
 
 // ---------- orders, audit ----------
 
-async function logAudit(actor: string, action: string, entity: string, detail: string, actorRole?: AuditEntry["actorRole"]) {
+export async function logAudit(actor: string, action: string, entity: string, detail: string, actorRole?: AuditEntry["actorRole"]) {
   const entry: AuditEntry = { id: crypto.randomUUID(), at: now(), actor, actorRole, action, entity, detail };
   await database().prepare("INSERT INTO audit (id, at, data) VALUES (?, ?, ?)").bind(entry.id, entry.at, JSON.stringify(entry)).run();
 }
@@ -152,7 +158,7 @@ async function readOrder(id: string) {
 }
 
 async function writeOrder(order: StoreOrder, deleted: boolean) {
-  await database().prepare("INSERT INTO orders (id, data, deleted, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted").bind(order.id, JSON.stringify(order), deleted ? 1 : 0, order.createdAt).run();
+  await database().prepare("INSERT INTO orders (id, data, deleted, created_at, customer_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted, customer_id = excluded.customer_id").bind(order.id, JSON.stringify(order), deleted ? 1 : 0, order.createdAt, order.customerId ?? null).run();
 }
 
 /** Operational data, trimmed to what the signed-in role may see. */
@@ -191,7 +197,7 @@ const placeOrderSchema = z.object({
   lines: z.array(z.object({ productId: z.string(), variantId: z.string(), quantity: z.number().int().min(1).max(100) })).min(1).max(60),
 });
 
-export async function placeOrder(input: PlaceOrderInput) {
+export async function placeOrder(input: PlaceOrderInput, customer?: Customer | null) {
   const parsed = placeOrderSchema.safeParse(input);
   if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid order");
   const data = parsed.data;
@@ -209,7 +215,7 @@ export async function placeOrder(input: PlaceOrderInput) {
   const seq = await database().prepare("INSERT INTO kv (key, value, updated_at) VALUES ('orderSeq', '1051', ?) ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1, updated_at = excluded.updated_at RETURNING value").bind(now()).first<{ value: string }>();
   const order: StoreOrder = {
     id: `KA-${seq?.value ?? Date.now()}`, token: crypto.randomUUID().replaceAll("-", ""),
-    customer: data.customer, phone: data.phone, whatsapp: data.whatsapp || data.phone, email: data.email || undefined,
+    customer: data.customer, phone: data.phone, whatsapp: data.whatsapp || data.phone, email: data.email || customer?.email || undefined, customerId: customer?.id,
     address: [data.address, data.landmark].filter(Boolean).join(", "), pincode: data.pincode,
     deliveryDate: data.deliveryDate, slot: data.slot ?? "", total: subtotal + config.settings.deliveryFee, items: lines.reduce((s, l) => s + l.quantity, 0),
     status: "PENDING", paymentMethod: data.paymentMethod, paymentStatus: "PENDING", createdAt: now(), lines, customerNote: data.note || undefined,
@@ -219,11 +225,11 @@ export async function placeOrder(input: PlaceOrderInput) {
   return order;
 }
 
-export async function getOrderForInvoice(request: Request, id: string, token: string | null) {
+export async function getOrderForInvoice(request: Request, id: string, token: string | null, customerId?: string) {
   await ready();
   const found = await readOrder(id);
   if (!found) throw new HttpError(404, "Order not found");
-  if (found.order.token !== token && !(await currentAdmin(request))) throw new HttpError(403, "This invoice link is not valid");
+  if (found.order.token !== token && !(customerId && found.order.customerId === customerId) && !(await currentAdmin(request))) throw new HttpError(403, "This invoice link is not valid");
   const config = await getConfig();
   return { order: found.order, settings: config.settings, branding: config.branding };
 }
@@ -268,7 +274,7 @@ function upsert<T extends { id: string }>(list: T[], item: T) {
 /** Which roles may run each admin action. The dev admin controls the whole site. */
 function permittedRoles(action: AdminAction): AdminRole[] {
   switch (action.type) {
-    case "order.update": case "admin.changeOwnPassword": return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
+    case "order.update": case "admin.changeOwnPassword": case "admin.updateOwnProfile": return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
     case "order.recycle": case "settings.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
     default: return ["DEV_ADMIN"];
   }
@@ -355,6 +361,17 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
         await log("Admin deleted", target?.username ?? action.id, "Account removed");
         return;
       }
+      case "admin.updateOwnProfile": {
+        if ((await hashPassword(action.current, admin.salt)) !== admin.passwordHash) throw new HttpError(400, "Current password is incorrect");
+        const name = text(action.name, 80);
+        const username = text(action.username, 40).toLowerCase();
+        if (!name) throw new HttpError(400, "Name is required");
+        if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new HttpError(400, "User ID must be 3–40 letters, numbers, dots or dashes");
+        if (admins.some((a) => a.id !== admin.id && a.username.toLowerCase() === username)) throw new HttpError(409, "That user ID already exists");
+        await writeAdmin({ ...admin, name, username });
+        await log("Profile updated", username, [name !== admin.name && `Name: ${admin.name} → ${name}`, username !== admin.username && `User ID: ${admin.username} → ${username}`].filter(Boolean).join(" · ") || "No changes");
+        return;
+      }
       case "admin.changeOwnPassword": {
         if ((await hashPassword(action.current, admin.salt)) !== admin.passwordHash) throw new HttpError(400, "Current password is incorrect");
         if (String(action.next).length < 8) throw new HttpError(400, "New password must be at least 8 characters");
@@ -426,6 +443,12 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
       if (p.gstin !== undefined) { const v = text(p.gstin, 15).toUpperCase(); if (v && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v)) throw new HttpError(400, "GSTIN format looks wrong (15 characters, e.g. 33ABCDE1234F1Z5)"); settings.gstin = v; }
       if (p.fssai !== undefined) settings.fssai = text(p.fssai, 20);
       if (p.legalName !== undefined) settings.legalName = text(p.legalName, 120);
+      if (p.googleClientId !== undefined) {
+        if (admin.role !== "DEV_ADMIN") throw new HttpError(403, "Only the dev admin can change Google login");
+        const id = text(p.googleClientId, 200);
+        if (id && !/^[0-9]+-[a-z0-9]+.apps.googleusercontent.com$/.test(id)) throw new HttpError(400, "That doesn't look like a Google Client ID (it ends with .apps.googleusercontent.com)");
+        settings.googleClientId = id;
+      }
       if (p.placeOfSupply !== undefined) settings.placeOfSupply = text(p.placeOfSupply, 60);
       next = { ...config, settings };
       entry = ["Settings updated", "Store & GST", Object.keys(p).join(", ")];

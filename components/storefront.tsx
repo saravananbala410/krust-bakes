@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, X } from "lucide-react";
 import { createContext, FormEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
 import { useCartStore } from "@/lib/cart-store";
 import { useAppStore } from "@/lib/app-store";
+import { useCustomerStore } from "@/lib/customer-store";
 import type { CarouselSlide, PublicConfig } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
+import { AccountSheet } from "./customer-account";
 import { socialIcons, socialLabels, WhatsAppIcon } from "./social-icons";
 
 const HERO = "/brand/krust-hero.png";
@@ -52,7 +54,8 @@ function useScrollReveal(key: string) {
 export function Storefront({ initialConfig }: { initialConfig: PublicConfig }) {
   const live = useAppStore((state) => (state.loaded ? state.config : null));
   const refresh = useAppStore((state) => state.refresh);
-  useEffect(() => { void refresh(); }, [refresh]);
+  const refreshCustomer = useCustomerStore((state) => state.refresh);
+  useEffect(() => { void refresh(); void refreshCustomer(); }, [refresh, refreshCustomer]);
   return <ConfigContext.Provider value={live ?? initialConfig}><StorefrontPage /></ConfigContext.Provider>;
 }
 
@@ -92,6 +95,7 @@ function StorefrontPage() {
           </nav>
           <div className="flex items-center gap-2">
             <SocialRow links={socialLinks} className="hidden xl:flex" small />
+            <AccountButton />
             <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
               {cartItems > 0 && <span key={cartItems} className="reveal rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-krust">{cartItems}</span>}
@@ -202,6 +206,7 @@ function StorefrontPage() {
         </div>
       </div>}
       {checkoutOpen && <CheckoutSheet onClose={() => setCheckoutOpen(false)} />}
+      <AccountSheetHost clientId={settings.googleClientId} />
     </main>
   );
 }
@@ -371,6 +376,19 @@ function Hero() {
   );
 }
 
+function AccountButton() {
+  const { customer, setAccountOpen } = useCustomerStore();
+  return <button onClick={() => setAccountOpen(true)} aria-label={customer ? "My account and orders" : "Sign in"} className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
+    {customer?.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-blush"><UserRound size={16} /></span>}
+    <span className="hidden sm:inline">{customer ? "My orders" : "Sign in"}</span>
+  </button>;
+}
+
+function AccountSheetHost({ clientId }: { clientId: string }) {
+  const open = useCustomerStore((state) => state.accountOpen);
+  return open ? <AccountSheet clientId={clientId} /> : null;
+}
+
 function SectionHeading({ eyebrow, title, copy, center = false }: { eyebrow: string; title: string; copy?: string; center?: boolean }) {
   return <div data-reveal className={center ? "text-center" : ""}><p className="eyebrow">{eyebrow}</p><h2 className="mt-3 text-4xl leading-tight sm:text-5xl lg:text-[3.4rem]">{title}</h2>{center && <div className="gold-rule mx-auto mt-5 w-32" />}{copy && <p className={`mt-3 max-w-2xl text-sm leading-7 text-cocoa ${center ? "mx-auto" : ""}`}>{copy}</p>}</div>;
 }
@@ -461,6 +479,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const { resolved, items, subtotal, gst } = useCartMath();
   const { settings, socialLinks } = useConfig();
   const clear = useCartStore((state) => state.clear);
+  const { customer, lastDetails, refresh: refreshCustomer, setAccountOpen } = useCustomerStore();
   const [step, setStep] = useState<"details" | "success">("details");
   const [payment, setPayment] = useState<"UPI" | "ONLINE" | "PAY_ON_DELIVERY">("UPI");
   const [placed, setPlaced] = useState<{ id: string; token: string; total: number } | null>(null);
@@ -481,7 +500,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
       }) });
       const body = (await response.json()) as { id: string; token: string; total: number; error?: string };
       if (!response.ok) throw new Error(body.error ?? "Could not place the order");
-      setPlaced(body); clear(); setStep("success");
+      setPlaced(body); clear(); setStep("success"); void refreshCustomer();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -493,9 +512,10 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   return <div className="fixed inset-0 z-50 flex justify-end bg-ink/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Checkout"><button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="Close checkout" /><aside className="relative h-full w-full max-w-[610px] overflow-y-auto bg-cream shadow-2xl" style={{ animation: "slide-in-right .45s cubic-bezier(.2,.8,.2,1) both" }}>
     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Secure order</p><h2 className="text-3xl">{step === "details" ? "Checkout" : "Order confirmed"}</h2></div><button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-petal bg-white" aria-label="Close"><X size={18} /></button></div>
     {step === "success" && placed ? <div className="reveal flex min-h-[75vh] flex-col items-center justify-center px-7 text-center"><div className="pulse-ring grid h-20 w-20 place-items-center rounded-full bg-krust text-white"><Check size={36} /></div><p className="eyebrow mt-7">Order {placed.id}</p><h3 className="mt-3 text-5xl leading-none">Your bake is <span className="font-hero text-krust">booked.</span></h3><p className="mt-5 max-w-md text-sm leading-6 text-cocoa">We&apos;ve received your order. The bakery will confirm your delivery shortly on WhatsApp.</p><div className="mt-7 w-full max-w-sm rounded-2xl border-2 border-krust bg-white p-5 text-left"><div className="flex justify-between text-sm"><span className="text-cocoa">Order total</span><span className="font-bold">{formatInr(placed.total)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-cocoa">Payment</span><span className="font-semibold">{payment === "PAY_ON_DELIVERY" ? "Pay on delivery" : payment}</span></div></div><div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2"><Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link><a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
-    <form onSubmit={submit} className="px-5 py-7 sm:px-8">
+    <form key={customer?.id ?? "guest"} onSubmit={submit} className="px-5 py-7 sm:px-8">
+      {customer ? <div className="mb-5 flex items-center gap-3 rounded-2xl bg-mint/70 p-4 text-xs font-bold text-[#2f7a4a]"><Check size={16} /> Signed in as {customer.email}. This order will appear in My orders.</div> : <button type="button" onClick={() => setAccountOpen(true)} className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-krust/40 bg-white p-4 text-left text-xs font-bold text-ink transition hover:border-krust"><span>Sign in with Google to save this order to your account <span className="block font-medium text-cocoa">Or simply continue as a guest below.</span></span><ArrowRight size={16} className="shrink-0 text-krust" /></button>}
       <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex justify-between gap-3 text-xs"><span className="text-cocoa">{line.quantity} × {product.name} <span className="opacity-60">({variant.name})</span></span><span className="font-semibold">{formatInr(variant.price * line.quantity)}</span></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
-      <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required /></div>
+      <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} defaultValue={lastDetails?.name ?? customer?.name} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required defaultValue={lastDetails?.phone} /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" defaultValue={lastDetails?.whatsapp} /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" defaultValue={customer?.email} readOnly={!!customer} /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" defaultValue={lastDetails?.address} /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required defaultValue={lastDetails?.pincode} /></div>
       <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
       <SectionTitle number="03" title="Payment" /><div className="grid gap-3 sm:grid-cols-3">{([["UPI", "UPI QR", "Scan & pay"], ["ONLINE", "Online", "Card / netbanking"], ["PAY_ON_DELIVERY", "Pay on delivery", "Cash or UPI at door"]] as const).map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
       {error && <p className="mt-6 rounded-xl border border-krust/30 bg-blush p-4 text-xs font-semibold text-krust-deep">{error}</p>}

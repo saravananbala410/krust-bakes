@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const [config, admin] = await Promise.all([getConfig(), currentAdmin(request)]);
-    return Response.json({ config, me: admin ? toPublicAdmin(admin) : null, admin: admin ? await getAdminData() : null }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ config, me: admin ? toPublicAdmin(admin) : null, admin: admin ? await getAdminData(admin) : null }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return errorResponse(error);
   }
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const action = (await request.json()) as AdminAction;
     await runAction(admin, action);
     const fresh = await currentAdmin(request);
-    return Response.json({ config: await getConfig(), me: fresh ? toPublicAdmin(fresh) : null, admin: fresh ? await getAdminData() : null });
+    return Response.json({ config: await getConfig(), me: fresh ? toPublicAdmin(fresh) : null, admin: fresh ? await getAdminData(fresh) : null });
   } catch (error) {
     return errorResponse(error);
   }

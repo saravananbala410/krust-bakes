@@ -10,16 +10,26 @@ export type StoreOrder = {
   deliveryDate?: string; slot: string; total: number; items: number; status: string; paymentMethod: string; paymentStatus: string;
   createdAt: string; updatedAt?: string; deletedAt?: string; lines: OrderLine[]; note?: string; customerNote?: string;
 };
-export type AuditEntry = { id: string; at: string; actor: string; action: string; entity: string; detail: string };
-export type AdminUser = { id: string; name: string; username: string; role: "ADMIN" | "SUPER_ADMIN"; active: boolean; createdAt?: string };
+export type AuditEntry = { id: string; at: string; actor: string; actorRole?: AdminRole | "CUSTOMER"; action: string; entity: string; detail: string };
+/** DEV_ADMIN: head of the site, full access. SUPER_ADMIN: business owner view. SALES_ADMIN: orders and payments only. */
+export type AdminRole = "DEV_ADMIN" | "SUPER_ADMIN" | "SALES_ADMIN";
+export const ROLE_LABELS: Record<AdminRole, string> = { DEV_ADMIN: "Dev admin", SUPER_ADMIN: "Super admin", SALES_ADMIN: "Sales admin" };
+export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History";
+export const ROLE_TABS: Record<AdminRole, AdminTab[]> = {
+  DEV_ADMIN: ["Overview", "Orders", "Recycle bin", "Products", "Categories", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
+  SUPER_ADMIN: ["Overview", "Orders", "GST", "Customers & payments", "Settings", "History"],
+  SALES_ADMIN: ["Orders", "Customers & payments"],
+};
+export type AdminUser = { id: string; name: string; username: string; role: AdminRole; active: boolean; createdAt?: string };
 export type CarouselSlide = { id: string; eyebrow: string; title: string; copy: string; imageUrl: string; ctaLabel?: string; active: boolean };
-export type Testimonial = { id: string; name: string; role: string; quote: string; active: boolean };
+export type Testimonial = { id: string; name: string; role: string; quote: string; rating?: number; active: boolean };
 export type Faq = { id: string; question: string; answer: string; active: boolean };
 export type SocialLinks = Record<"instagram" | "facebook" | "twitter" | "whatsapp", string>;
 export type Branding = {
   storeName: string; tagline: string; logoUrl: string; wordmarkUrl: string; announcement: string;
   heroEyebrow: string; heroTitle: string; heroAccent: string; heroCopy: string; heroImage: string;
-  phone: string; email: string; address: string; mapsUrl: string;
+  phone: string; email: string; address: string; mapsUrl: string; mapsEmbedUrl: string;
+  whatsappNote: string; ratingValue: string; ratingCount: string;
 };
 export type TeamMember = { id: string; name: string; role: string; photoUrl: string };
 export type Story = {
@@ -38,7 +48,7 @@ export type AdminData = { orders: StoreOrder[]; recycleBin: StoreOrder[]; audit:
 
 export type PlaceOrderInput = {
   customer: string; phone: string; whatsapp?: string; email?: string; address: string; landmark?: string; pincode: string;
-  deliveryDate: string; slot: string; paymentMethod: "ONLINE" | "UPI" | "PAY_ON_DELIVERY"; note?: string;
+  deliveryDate: string; slot?: string; paymentMethod: "ONLINE" | "UPI" | "PAY_ON_DELIVERY"; note?: string;
   lines: Array<{ productId: string; variantId: string; quantity: number }>;
 };
 
@@ -103,7 +113,8 @@ export function seedConfig(): PublicConfig {
       heroEyebrow: "Crafted in small batches, daily", heroTitle: "Baked with", heroAccent: "obsession.",
       heroCopy: "Honest ingredients, old-world technique and a little Melbourne spirit, made fresh every morning in the heart of Chennai.",
       heroImage: "/brand/krust-hero.png", phone: "+91 98404 77330", email: "krustbakes@gmail.com",
-      address: "No. 7 (NP), Guindy Industrial Estate, Ekkattuthangal, Chennai 600032", mapsUrl: "https://maps.google.com/?q=Guindy+Industrial+Estate+Chennai",
+      address: "No. 7 (NP), Guindy Industrial Estate, Ekkattuthangal, Chennai 600032", mapsUrl: "https://maps.google.com/?q=Guindy+Industrial+Estate+Chennai", mapsEmbedUrl: "",
+      whatsappNote: "For bulk & customised orders, chat with us on WhatsApp", ratingValue: "4.9", ratingCount: "1,200+ happy homes",
     },
   };
 }

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, slug,
-  type AdminAction, type AdminData, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
+  type AdminAction, type AdminData, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
 } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
 
@@ -73,12 +73,21 @@ async function listAdmins(): Promise<AdminRecord[]> {
   const { results } = await database().prepare("SELECT data FROM admins").all<{ data: string }>();
   if (!results.length) {
     const salt = crypto.randomUUID();
-    const root: AdminRecord = { id: "root-admin", name: DEFAULT_ADMIN.name, username: DEFAULT_ADMIN.username, role: "SUPER_ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(DEFAULT_ADMIN.password, salt) };
+    const root: AdminRecord = { id: "root-admin", name: DEFAULT_ADMIN.name, username: DEFAULT_ADMIN.username, role: "DEV_ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(DEFAULT_ADMIN.password, salt) };
     await writeAdmin(root);
     return [root];
   }
-  return results.map((r) => JSON.parse(r.data) as AdminRecord);
+  return results.map((r) => normalizeRole(JSON.parse(r.data) as AdminRecord));
 }
+
+/** Maps accounts created before the three-role model: the main account is the dev admin, old "ADMIN" users become sales admins. */
+function normalizeRole(admin: AdminRecord): AdminRecord {
+  const legacy = admin.role as string;
+  if (admin.id === "root-admin") return { ...admin, role: "DEV_ADMIN" };
+  if (legacy === "ADMIN") return { ...admin, role: "SALES_ADMIN" };
+  return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"].includes(legacy) ? admin : { ...admin, role: "SALES_ADMIN" };
+}
+const ROLES: AdminRole[] = ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
 
 async function writeAdmin(admin: AdminRecord) {
   await database().prepare("INSERT INTO admins (id, username, data) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET username = excluded.username, data = excluded.data").bind(admin.id, admin.username, JSON.stringify(admin)).run();
@@ -101,7 +110,7 @@ export async function login(request: Request, username: string, password: string
     database().prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()),
     database().prepare("INSERT INTO sessions (token_hash, admin_id, expires_at) VALUES (?, ?, ?)").bind(await sha256(token), admin.id, expires),
   ]);
-  await logAudit(admin.name, "Signed in", admin.username, "Admin session started");
+  await logAudit(admin.name, "Signed in", admin.username, "Admin session started", admin.role);
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return { user: publicAdmin(admin), cookie: `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}` };
 }
@@ -132,8 +141,8 @@ export const toPublicAdmin = publicAdmin;
 
 // ---------- orders, audit ----------
 
-async function logAudit(actor: string, action: string, entity: string, detail: string) {
-  const entry: AuditEntry = { id: crypto.randomUUID(), at: now(), actor, action, entity, detail };
+async function logAudit(actor: string, action: string, entity: string, detail: string, actorRole?: AuditEntry["actorRole"]) {
+  const entry: AuditEntry = { id: crypto.randomUUID(), at: now(), actor, actorRole, action, entity, detail };
   await database().prepare("INSERT INTO audit (id, at, data) VALUES (?, ?, ?)").bind(entry.id, entry.at, JSON.stringify(entry)).run();
 }
 
@@ -146,7 +155,8 @@ async function writeOrder(order: StoreOrder, deleted: boolean) {
   await database().prepare("INSERT INTO orders (id, data, deleted, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted").bind(order.id, JSON.stringify(order), deleted ? 1 : 0, order.createdAt).run();
 }
 
-export async function getAdminData(): Promise<AdminData> {
+/** Operational data, trimmed to what the signed-in role may see. */
+export async function getAdminData(viewer: AdminRecord): Promise<AdminData> {
   await ready();
   const [orders, audit, admins] = await Promise.all([
     database().prepare("SELECT data, deleted FROM orders ORDER BY created_at DESC").all<{ data: string; deleted: number }>(),
@@ -154,12 +164,15 @@ export async function getAdminData(): Promise<AdminData> {
     listAdmins(),
   ]);
   const parsed = orders.results.map((r) => ({ order: JSON.parse(r.data) as StoreOrder, deleted: r.deleted === 1 }));
-  return {
-    orders: parsed.filter((r) => !r.deleted).map((r) => r.order),
-    recycleBin: parsed.filter((r) => r.deleted).map((r) => r.order),
-    audit: audit.results.map((r) => JSON.parse(r.data) as AuditEntry),
-    admins: admins.map(publicAdmin),
-  };
+  const live = parsed.filter((r) => !r.deleted).map((r) => r.order);
+  if (viewer.role === "SALES_ADMIN") return { orders: live, recycleBin: [], audit: [], admins: [] };
+  const entries = audit.results.map((r) => JSON.parse(r.data) as AuditEntry);
+  if (viewer.role === "SUPER_ADMIN") {
+    // The dev admin's work history is private to dev admins.
+    const devNames = new Set(admins.filter((a) => a.role === "DEV_ADMIN").map((a) => a.name));
+    return { orders: live, recycleBin: [], audit: entries.filter((e) => e.actorRole !== "DEV_ADMIN" && !(e.actorRole === undefined && devNames.has(e.actor))), admins: [] };
+  }
+  return { orders: live, recycleBin: parsed.filter((r) => r.deleted).map((r) => r.order), audit: entries, admins: admins.map(publicAdmin) };
 }
 
 const phone = z.string().trim().regex(/^\+?[0-9\s-]{10,16}$/, "Enter a valid phone number");
@@ -172,7 +185,7 @@ const placeOrderSchema = z.object({
   landmark: z.string().trim().max(120).optional(),
   pincode: z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a valid 6-digit pincode"),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  slot: z.string().trim().min(3).max(60),
+  slot: z.string().trim().max(60).optional(),
   paymentMethod: z.enum(["ONLINE", "UPI", "PAY_ON_DELIVERY"]),
   note: z.string().trim().max(500).optional(),
   lines: z.array(z.object({ productId: z.string(), variantId: z.string(), quantity: z.number().int().min(1).max(100) })).min(1).max(60),
@@ -198,11 +211,11 @@ export async function placeOrder(input: PlaceOrderInput) {
     id: `KA-${seq?.value ?? Date.now()}`, token: crypto.randomUUID().replaceAll("-", ""),
     customer: data.customer, phone: data.phone, whatsapp: data.whatsapp || data.phone, email: data.email || undefined,
     address: [data.address, data.landmark].filter(Boolean).join(", "), pincode: data.pincode,
-    deliveryDate: data.deliveryDate, slot: data.slot, total: subtotal + config.settings.deliveryFee, items: lines.reduce((s, l) => s + l.quantity, 0),
+    deliveryDate: data.deliveryDate, slot: data.slot ?? "", total: subtotal + config.settings.deliveryFee, items: lines.reduce((s, l) => s + l.quantity, 0),
     status: "PENDING", paymentMethod: data.paymentMethod, paymentStatus: "PENDING", createdAt: now(), lines, customerNote: data.note || undefined,
   };
   await writeOrder(order, false);
-  await logAudit("Customer", "Customer order placed", order.id, `${order.customer} · ₹${order.total} · ${order.paymentMethod}`);
+  await logAudit("Customer", "Customer order placed", order.id, `${order.customer} · ₹${order.total} · ${order.paymentMethod}`, "CUSTOMER");
   return order;
 }
 
@@ -218,12 +231,13 @@ export async function getOrderForInvoice(request: Request, id: string, token: st
 // ---------- assets (uploaded images) ----------
 
 export async function saveAsset(admin: AdminRecord, mime: string, base64: string) {
+  if (admin.role !== "DEV_ADMIN") throw new HttpError(403, "Only the dev admin can upload images");
   if (!/^image\/(png|jpe?g|webp|gif)$/.test(mime)) throw new HttpError(415, "Only image uploads are allowed");
   if (base64.length > 2_000_000) throw new HttpError(413, "Image is too large. Please use one under 1.5 MB.");
   await ready();
   const id = crypto.randomUUID();
   await database().prepare("INSERT INTO assets (id, mime, data, created_at) VALUES (?, ?, ?, ?)").bind(id, mime, base64, now()).run();
-  await logAudit(admin.name, "Image uploaded", id, mime);
+  await logAudit(admin.name, "Image uploaded", id, mime, admin.role);
   return `/api/assets/${id}`;
 }
 
@@ -251,9 +265,19 @@ function upsert<T extends { id: string }>(list: T[], item: T) {
   return list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
 }
 
+/** Which roles may run each admin action. The dev admin controls the whole site. */
+function permittedRoles(action: AdminAction): AdminRole[] {
+  switch (action.type) {
+    case "order.update": case "admin.changeOwnPassword": return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
+    case "order.recycle": case "settings.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
+    default: return ["DEV_ADMIN"];
+  }
+}
+
 export async function runAction(admin: AdminRecord, action: AdminAction) {
-  const log = (what: string, entity: string, detail: string) => logAudit(admin.name, what, entity, detail);
-  const superOnly = () => { if (admin.role !== "SUPER_ADMIN") throw new HttpError(403, "Only the main super admin can manage admin users"); };
+  const log = (what: string, entity: string, detail: string) => logAudit(admin.name, what, entity, detail, admin.role);
+  const allowed = permittedRoles(action);
+  if (!allowed.includes(admin.role)) throw new HttpError(403, "Your role does not have access to this action");
 
   if (action.type.startsWith("order.") || action.type === "recycle.empty") {
     await ready();
@@ -297,25 +321,23 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
     const admins = await listAdmins();
     switch (action.type) {
       case "admin.create": {
-        superOnly();
         const username = text(action.username, 40).toLowerCase();
         if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new HttpError(400, "User ID must be 3–40 letters, numbers, dots or dashes");
         if (admins.some((a) => a.username.toLowerCase() === username)) throw new HttpError(409, "That user ID already exists");
         if (String(action.password).length < 8) throw new HttpError(400, "Password must be at least 8 characters");
         const salt = crypto.randomUUID();
-        await writeAdmin({ id: crypto.randomUUID(), name: text(action.name, 80) || username, username, role: action.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(action.password, salt) });
+        await writeAdmin({ id: crypto.randomUUID(), name: text(action.name, 80) || username, username, role: ROLES.includes(action.role) ? action.role : "SALES_ADMIN", active: true, createdAt: now(), salt, passwordHash: await hashPassword(action.password, salt) });
         await log("Admin created", username, action.role);
         return;
       }
       case "admin.update": {
-        superOnly();
         const target = admins.find((a) => a.id === action.id);
         if (!target) throw new HttpError(404, "Admin not found");
-        if (target.id === "root-admin" && (action.active === false || action.role === "ADMIN")) throw new HttpError(400, "The main super admin cannot be disabled or demoted");
+        if (target.id === "root-admin" && (action.active === false || (action.role && action.role !== "DEV_ADMIN"))) throw new HttpError(400, "The main dev admin cannot be disabled or demoted");
         const next = { ...target };
         const details: string[] = [];
         if (action.active !== undefined) { next.active = action.active; details.push(action.active ? "Enabled" : "Disabled"); }
-        if (action.role) { next.role = action.role; details.push(`Role ${action.role}`); }
+        if (action.role) { if (!ROLES.includes(action.role)) throw new HttpError(400, "Unknown role"); next.role = action.role; details.push(`Role ${action.role}`); }
         if (action.password) {
           if (action.password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
           next.salt = crypto.randomUUID(); next.passwordHash = await hashPassword(action.password, next.salt); details.push("Password reset");
@@ -327,8 +349,7 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
         return;
       }
       case "admin.delete": {
-        superOnly();
-        if (action.id === "root-admin" || action.id === admin.id) throw new HttpError(400, "You cannot delete the main super admin or yourself");
+        if (action.id === "root-admin" || action.id === admin.id) throw new HttpError(400, "You cannot delete the main dev admin or yourself");
         const target = admins.find((a) => a.id === action.id);
         await database().batch([database().prepare("DELETE FROM admins WHERE id = ?").bind(action.id), database().prepare("DELETE FROM sessions WHERE admin_id = ?").bind(action.id)]);
         await log("Admin deleted", target?.username ?? action.id, "Account removed");
@@ -457,7 +478,7 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
     }
     case "testimonial.save": {
       const t = action.item;
-      const item = { id: text(t.id, 80) || crypto.randomUUID(), name: text(t.name, 80), role: text(t.role, 80), quote: text(t.quote, 500), active: t.active !== false };
+      const item = { id: text(t.id, 80) || crypto.randomUUID(), name: text(t.name, 80), role: text(t.role, 80), quote: text(t.quote, 500), rating: Math.min(5, Math.max(1, Math.round(Number(t.rating) || 5))), active: t.active !== false };
       if (!item.name || !item.quote) throw new HttpError(400, "Name and quote are required");
       next = { ...config, testimonials: upsert(config.testimonials, item) };
       entry = ["Testimonial saved", item.name, item.active ? "Visible" : "Hidden"];

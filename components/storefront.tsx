@@ -84,7 +84,7 @@ function StorefrontPage() {
       <header className="sticky top-0 z-40 border-b border-petal/70 bg-cream/85 backdrop-blur-xl">
         <div className="mx-auto flex h-[78px] max-w-[1440px] items-center justify-between px-5 lg:px-10">
           <Link href="/" className="flex items-center gap-3" aria-label={`${branding.storeName} home`}>
-            <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-2xl object-contain shadow-[0_6px_18px_rgba(215,38,61,.18)]" />
+            <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-2xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)]" />
             <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" /><p className="hidden text-[9px] font-semibold uppercase tracking-[.3em] text-cocoa sm:block">{branding.tagline}</p></div>
           </Link>
           <nav className="hidden items-center gap-8 text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa lg:flex">
@@ -92,7 +92,7 @@ function StorefrontPage() {
           </nav>
           <div className="flex items-center gap-2">
             <SocialRow links={socialLinks} className="hidden xl:flex" small />
-            <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(215,38,61,.28)] transition hover:bg-krust-deep">
+            <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
               {cartItems > 0 && <span key={cartItems} className="reveal rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-krust">{cartItems}</span>}
             </button>
@@ -135,7 +135,7 @@ function StorefrontPage() {
       {featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
         <SectionHeading eyebrow="Bestsellers" title="The ones they come back for" />
         <div className="no-scrollbar -mx-5 mt-10 flex snap-x gap-4 overflow-x-auto px-5 pb-4">
-          {featured.map((p) => <div key={p.id} className="w-[290px] shrink-0 snap-start"><ProductCard product={p} /></div>)}
+          {featured.map((p) => <div key={p.id} className="w-[200px] shrink-0 snap-start sm:w-[290px]"><ProductCard product={p} /></div>)}
         </div>
       </section>}
 
@@ -145,9 +145,9 @@ function StorefrontPage() {
           <label className="flex h-12 w-full items-center gap-3 rounded-full border border-petal bg-white px-5 shadow-sm transition focus-within:border-krust lg:w-80"><Search size={17} className="text-cocoa" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the bake…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-cocoa/60" /></label>
         </div>
         <div className="no-scrollbar mt-10 flex gap-2 overflow-x-auto pb-2">
-          {["All", ...activeCategories.map((c) => c.name)].map((item) => <button key={item} onClick={() => setCategory(item)} className={`shrink-0 rounded-full border px-5 py-2.5 text-[13px] font-semibold transition ${category === item ? "border-krust bg-krust text-white shadow-[0_8px_20px_rgba(215,38,61,.25)]" : "border-petal bg-white text-cocoa hover:border-krust hover:text-krust"}`}>{item}</button>)}
+          {["All", ...activeCategories.map((c) => c.name)].map((item) => <button key={item} onClick={() => setCategory(item)} className={`shrink-0 rounded-full border px-5 py-2.5 text-[13px] font-semibold transition ${category === item ? "border-krust bg-krust text-white shadow-[0_8px_20px_rgba(236,36,39,.25)]" : "border-petal bg-white text-cocoa hover:border-krust hover:text-krust"}`}>{item}</button>)}
         </div>
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((product, i) => <div key={product.id} data-reveal style={{ "--reveal-delay": `${(i % 4) * 60}ms` } as React.CSSProperties}><ProductCard product={product} /></div>)}
         </div>
         {filtered.length === 0 && <div className="mt-8 rounded-3xl border border-dashed border-petal py-20 text-center text-sm text-cocoa">Nothing matched that search. Try another bake.</div>}
@@ -171,21 +171,7 @@ function StorefrontPage() {
         </div>
       </section>
 
-      {config.testimonials.some((t) => t.active) && <section id="reviews" className="bg-blush/60 py-20 lg:py-28">
-        <div className="mx-auto max-w-[1440px] px-5 lg:px-10">
-          <SectionHeading eyebrow="Kind words" title="Loved across Chennai" center />
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {config.testimonials.filter((t) => t.active).map((t, i) => (
-              <figure key={t.id} data-reveal style={{ "--reveal-delay": `${i * 100}ms` } as React.CSSProperties} className="lift rounded-[28px] border-2 border-krust/80 bg-white p-8">
-                <Quote className="text-krust" size={28} />
-                <div className="mt-4 flex gap-0.5 text-krust">{Array.from({ length: 5 }, (_, s) => <Star key={s} size={14} fill="currentColor" />)}</div>
-                <blockquote className="mt-4 font-display text-xl leading-8">“{t.quote}”</blockquote>
-                <figcaption className="mt-6 border-t border-petal pt-4"><p className="font-semibold">{t.name}</p><p className="text-xs uppercase tracking-[.16em] text-cocoa">{t.role}</p></figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>}
+      <Reviews />
 
       <section className="overflow-hidden border-y border-petal bg-white py-9">
         <p className="eyebrow mb-5 text-center">Trusted by</p>
@@ -196,7 +182,7 @@ function StorefrontPage() {
         <SectionHeading eyebrow="Good to know" title="Questions, answered" center />
         <div className="mt-10 space-y-3">
           {config.faqs.filter((f) => f.active).map((f) => (
-            <details key={f.id} data-reveal className="group rounded-2xl border border-petal bg-white px-6 py-5 open:border-krust open:shadow-[0_14px_40px_-20px_rgba(215,38,61,.4)]">
+            <details key={f.id} data-reveal className="group rounded-2xl border border-petal bg-white px-6 py-5 open:border-krust open:shadow-[0_14px_40px_-20px_rgba(236,36,39,.4)]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-xl">{f.question}<span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blush text-krust transition group-open:rotate-45"><Plus size={16} /></span></summary>
               <p className="mt-3 text-sm leading-7 text-cocoa">{f.answer}</p>
             </details>
@@ -204,41 +190,11 @@ function StorefrontPage() {
         </div>
       </section>}
 
-      <section id="visit" className="px-5 pb-20 lg:px-10">
-        <div data-reveal className="mx-auto grid max-w-[1440px] overflow-hidden rounded-[36px] border-[3px] border-krust bg-white lg:grid-cols-2">
-          <div className="p-8 sm:p-12 lg:p-16">
-            <p className="eyebrow">Visit the bakehouse</p>
-            <h2 className="mt-4 text-4xl sm:text-5xl">Come say <span className="font-hero text-6xl text-krust">hello</span></h2>
-            <div className="mt-8 space-y-4 text-sm text-cocoa">
-              <p className="flex gap-3"><MapPin size={18} className="mt-0.5 shrink-0 text-krust" />{branding.address}</p>
-              <a href={`tel:${branding.phone.replace(/\s/g, "")}`} className="flex gap-3 hover:text-krust"><Phone size={18} className="shrink-0 text-krust" />{branding.phone}</a>
-              <a href={`mailto:${branding.email}`} className="flex gap-3 hover:text-krust"><Mail size={18} className="shrink-0 text-krust" />{branding.email}</a>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3"><a href={branding.mapsUrl} target="_blank" rel="noreferrer" className="action"><MapPin size={15} /> Open in Maps</a><a href="#menu" className="action secondary">Order online</a></div>
-            <div className="gold-rule my-9" />
-            <p className="font-display text-2xl">Follow the fresh batch</p>
-            <p className="mt-1 text-xs text-cocoa">Daily bakes, behind-the-scenes and celebration inspiration.</p>
-            <SocialRow links={socialLinks} className="mt-5" />
-          </div>
-          <div className="relative min-h-[320px] bg-peach"><img src={branding.heroImage || HERO} alt="" className="absolute inset-0 h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-krust/25 to-transparent" /></div>
-        </div>
-      </section>
+      <Footer />
 
-      <footer className="border-t-4 border-krust bg-[#fbe3e4] px-5 py-14 text-ink lg:px-10">
-        <div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1.3fr_.8fr_.8fr]">
-          <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="w-[220px]" /><p className="mt-4 max-w-md text-sm leading-7 text-cocoa">Breads, tea cakes, cookies, brownies and savouries, baked fresh in Guindy, Chennai.</p><SocialRow links={socialLinks} className="mt-5" /></div>
-          <div><p className="eyebrow">Explore</p><div className="mt-4 flex flex-col gap-2 text-sm text-cocoa">{[["#menu", "Shop the bake"], ["#collections", "Collections"], ["#story", "Our story"], ["#visit", "Visit us"]].map(([h, l]) => <a key={h} href={h} className="hover:text-krust">{l}</a>)}</div></div>
-          <div><p className="eyebrow">Say hello</p><a href={`tel:${branding.phone.replace(/\s/g, "")}`} className="mt-4 block text-sm text-cocoa hover:text-krust">{branding.phone}</a><a href={`mailto:${branding.email}`} className="mt-2 block text-sm text-cocoa hover:text-krust">{branding.email}</a><p className="mt-2 text-sm leading-6 text-cocoa">{branding.address}</p></div>
-        </div>
-        <div className="mx-auto mt-12 flex max-w-[1440px] flex-col gap-2 border-t border-krust/20 pt-5 text-[11px] text-cocoa sm:flex-row sm:justify-between">
-          <p>© {new Date().getFullYear()} {branding.storeName}. Made fresh in Chennai.</p>
-          <p>Prices include GST{settings.gstin && ` · GSTIN ${settings.gstin}`}{settings.fssai && ` · FSSAI ${settings.fssai}`}</p>
-        </div>
-      </footer>
+      {socialLinks.whatsapp && <WhatsAppFab href={socialLinks.whatsapp} note={branding.whatsappNote} raised={cartItems > 0} />}
 
-      {socialLinks.whatsapp && <a href={socialLinks.whatsapp} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className={`pulse-ring fixed right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-xl transition-all ${cartItems > 0 ? "bottom-28" : "bottom-6"}`}><WhatsAppIcon size={26} /></a>}
-
-      {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_rgba(215,38,61,.14)] backdrop-blur-xl">
+      {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_rgba(236,36,39,.14)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-5"><span className="grid h-11 w-11 place-items-center rounded-full bg-krust text-white"><ShoppingBag size={19} /></span><div><p className="text-[11px] text-cocoa">{cartItems} item{cartItems === 1 ? "" : "s"} in your basket</p><p className="font-display text-xl">{formatInr(subtotal)}</p></div></div>
           <div className="hidden text-right md:block">{subtotal < settings.minimumOrder ? <><p className="text-xs font-semibold text-krust">Add {formatInr(settings.minimumOrder - subtotal)} for delivery</p><div className="mt-1.5 h-1.5 w-48 overflow-hidden rounded-full bg-blush"><div className="h-full rounded-full bg-krust transition-all" style={{ width: `${Math.min(100, (subtotal / settings.minimumOrder) * 100)}%` }} /></div></> : <p className="flex items-center gap-2 text-xs font-semibold text-[#2f7a4a]"><Check size={14} /> Delivery minimum reached</p>}</div>
@@ -250,13 +206,124 @@ function StorefrontPage() {
   );
 }
 
+function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase(); }
+
+/** Social proof: rating summary card plus a rotating spotlight review. */
+function Reviews() {
+  const { testimonials, branding } = useConfig();
+  const items = testimonials.filter((t) => t.active);
+  const [index, setIndex] = useState(0);
+  const count = items.length;
+  useEffect(() => {
+    if (count < 2) return;
+    const timer = setTimeout(() => setIndex((v) => (v + 1) % count), 7000);
+    return () => clearTimeout(timer);
+  }, [index, count]);
+  if (!count) return null;
+  const current = items[index % count];
+  return (
+    <section id="reviews" className="relative overflow-hidden bg-[#f7ebd0] py-20 lg:py-28">
+      <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-krust/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-white/60 blur-3xl" />
+      <div className="relative mx-auto max-w-[1280px] px-5 lg:px-10">
+        <SectionHeading eyebrow="Kind words" title="Loved across Chennai" center />
+        <div className="mt-12 grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
+          <div data-reveal className="relative flex flex-col justify-between overflow-hidden rounded-[32px] bg-krust p-8 text-white shadow-[0_30px_70px_-25px_rgba(236,36,39,.7)] sm:p-10">
+            <Quote size={120} className="absolute -right-4 -top-4 text-white/10" />
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[.24em] text-white/80">Customer rating</p>
+              <div className="mt-4 flex items-end gap-3"><p className="font-display text-7xl font-black leading-none sm:text-8xl">{branding.ratingValue}</p><p className="mb-2 text-lg font-bold text-white/80">/ 5</p></div>
+              <div className="mt-4 flex gap-1">{Array.from({ length: 5 }, (_, s) => <Star key={s} size={22} fill="currentColor" className="text-[#ffd45c]" />)}</div>
+              <p className="mt-4 text-lg font-bold">{branding.ratingCount}</p>
+            </div>
+            <div className="mt-10">
+              <div className="flex -space-x-3">{items.slice(0, 5).map((t) => <span key={t.id} className="grid h-11 w-11 place-items-center rounded-full border-2 border-krust bg-white text-xs font-extrabold text-krust">{initials(t.name)}</span>)}</div>
+              <a href="#menu" className="mt-6 inline-flex h-12 items-center gap-2 rounded-full bg-white px-6 text-sm font-extrabold text-krust transition hover:-translate-y-0.5">Taste what they love <ArrowRight size={16} /></a>
+            </div>
+          </div>
+          <div data-reveal style={{ "--reveal-delay": "120ms" } as React.CSSProperties} className="flex flex-col rounded-[32px] border-[3px] border-krust bg-white p-8 shadow-[0_30px_70px_-35px_rgba(43,26,20,.45)] sm:p-12">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex gap-1 text-krust">{Array.from({ length: current.rating ?? 5 }, (_, s) => <Star key={s} size={18} fill="currentColor" />)}</div>
+              <span className="badge bg-blush text-krust"><Check size={12} /> Verified customer</span>
+            </div>
+            <blockquote key={current.id} className="fade-in mt-8 flex-1 font-display text-2xl font-bold leading-snug text-ink sm:text-[2.1rem] sm:leading-[1.3]">“{current.quote}”</blockquote>
+            <div className="mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-petal pt-6">
+              <div key={`p-${current.id}`} className="fade-in flex items-center gap-4"><span className="grid h-14 w-14 place-items-center rounded-full bg-krust text-base font-extrabold text-white">{initials(current.name)}</span><div><p className="text-lg font-extrabold">{current.name}</p><p className="text-xs font-bold uppercase tracking-[.16em] text-cocoa">{current.role}</p></div></div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setIndex((v) => (v - 1 + count) % count)} aria-label="Previous review" className="grid h-11 w-11 place-items-center rounded-full border-2 border-krust text-krust transition hover:bg-blush"><ArrowLeft size={17} /></button>
+                <button onClick={() => setIndex((v) => (v + 1) % count)} aria-label="Next review" className="grid h-11 w-11 place-items-center rounded-full bg-krust text-white transition hover:bg-krust-deep"><ArrowRight size={17} /></button>
+              </div>
+            </div>
+            <div className="mt-6 flex gap-2">{items.map((t, i) => <button key={t.id} onClick={() => setIndex(i)} aria-label={`Show review from ${t.name}`} className={`h-1.5 rounded-full transition-all ${i === index % count ? "w-10 bg-krust" : "w-4 bg-petal"}`} />)}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Accepts a Google Maps embed URL or pasted <iframe> code; falls back to the address. */
+function mapEmbedSrc(raw: string, address: string) {
+  const src = raw.match(/src=["']([^"']+)["']/)?.[1] ?? raw.trim();
+  if (/^https:\/\/(www\.)?google\.[a-z.]+\/maps\/embed/.test(src) || /^https:\/\/maps\.google\.[a-z.]+\/maps\?.*output=embed/.test(src)) return src;
+  return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`;
+}
+
+function Footer() {
+  const { branding, settings, socialLinks } = useConfig();
+  const tel = `tel:${branding.phone.replace(/\s/g, "")}`;
+  return (
+    <footer id="visit" className="border-t-4 border-krust bg-[#f7ebd0] px-5 pb-8 pt-16 text-ink lg:px-10">
+      <div className="mx-auto grid max-w-[1440px] gap-10 lg:grid-cols-[1fr_.6fr_1.3fr]">
+        <div>
+          <img src={branding.wordmarkUrl} alt={branding.storeName} className="w-[220px]" />
+          <p className="mt-4 max-w-sm text-sm font-medium leading-7 text-cocoa">Breads, tea cakes, cookies, brownies and savouries, baked fresh in Guindy, Chennai.</p>
+          <SocialRow links={socialLinks} className="mt-6" />
+          <div className="mt-8 space-y-3 text-sm font-semibold">
+            <a href={tel} className="flex items-center gap-3 hover:text-krust"><span className="grid h-9 w-9 place-items-center rounded-full bg-white text-krust"><Phone size={15} /></span>{branding.phone}</a>
+            <a href={`mailto:${branding.email}`} className="flex items-center gap-3 hover:text-krust"><span className="grid h-9 w-9 place-items-center rounded-full bg-white text-krust"><Mail size={15} /></span>{branding.email}</a>
+          </div>
+        </div>
+        <div><p className="eyebrow">Explore</p><div className="mt-5 flex flex-col gap-3 text-sm font-semibold text-cocoa">{[["#menu", "Shop the bake"], ["#collections", "Collections"], ["#story", "Our story"], ["#reviews", "Reviews"], ["#visit", "Visit us"]].map(([h, l]) => <a key={h} href={h} className="transition hover:translate-x-1 hover:text-krust">{l}</a>)}</div></div>
+        <div className="overflow-hidden rounded-[28px] border-[3px] border-krust bg-white shadow-[0_24px_60px_-30px_rgba(236,36,39,.55)]">
+          <iframe title="Krust on Google Maps" src={mapEmbedSrc(branding.mapsEmbedUrl, branding.address)} className="h-56 w-full border-0 sm:h-64" loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-krust text-white"><MapPin size={17} /></span><div><p className="text-sm font-extrabold">Krust bakehouse</p><p className="text-xs font-medium leading-5 text-cocoa">{branding.address}</p></div></div>
+            <a href={branding.mapsUrl} target="_blank" rel="noreferrer" className="action shrink-0 justify-center">Get directions <ArrowRight size={14} /></a>
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto mt-12 flex max-w-[1440px] flex-col gap-2 border-t border-krust/20 pt-5 text-[11px] font-semibold text-cocoa sm:flex-row sm:justify-between">
+        <p>© {new Date().getFullYear()} {branding.storeName}. Made fresh in Chennai.</p>
+        <p>Prices include GST{settings.gstin && ` · GSTIN ${settings.gstin}`}{settings.fssai && ` · FSSAI ${settings.fssai}`}</p>
+      </div>
+    </footer>
+  );
+}
+
+/** Floating WhatsApp button with a connected note card for bulk orders. */
+function WhatsAppFab({ href, note, raised }: { href: string; note: string; raised: boolean }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={`fixed right-4 z-40 flex flex-col items-end transition-all sm:right-6 ${raised ? "bottom-28" : "bottom-6"}`}>
+      {open && note && <div className="reveal relative mb-3 w-[240px] rounded-2xl border-2 border-[#25d366] bg-white p-4 pr-8 shadow-[0_20px_45px_-15px_rgba(37,211,102,.55)] sm:w-[270px]">
+        <button onClick={() => setOpen(false)} aria-label="Hide message" className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full text-cocoa hover:bg-cream"><X size={13} /></button>
+        <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#1a9e4b]">Bulk & custom orders</p>
+        <a href={href} target="_blank" rel="noreferrer" className="mt-1 block text-[13px] font-bold leading-5 text-ink hover:text-[#1a9e4b]">{note}</a>
+        <span className="absolute -bottom-[9px] right-6 h-4 w-4 rotate-45 border-b-2 border-r-2 border-[#25d366] bg-white" />
+      </div>}
+      <a href={href} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className="pulse-ring grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-xl transition hover:scale-105"><WhatsAppIcon size={27} /></a>
+    </div>
+  );
+}
+
 function StorySection() {
   const { story } = useConfig();
   return (
     <section id="story" className="pastel-wash">
       <div className="mx-auto grid max-w-[1440px] items-center gap-12 px-5 py-20 lg:grid-cols-[.95fr_1.05fr] lg:px-10 lg:py-28">
         <div data-reveal className="relative mx-auto w-full max-w-[520px]">
-          <div className="relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[36px] border-[5px] border-krust shadow-[0_30px_80px_-30px_rgba(163,23,43,.5)]"><img src={story.imageUrl || HERO} alt="Our story" className={`ken-burns h-full w-full object-cover ${story.imageUrl === HERO ? "object-[78%_50%]" : ""}`} /></div>
+          <div className="relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[36px] border-[5px] border-krust shadow-[0_30px_80px_-30px_rgba(176,20,24,.5)]"><img src={story.imageUrl || HERO} alt="Our story" className={`ken-burns h-full w-full object-cover ${story.imageUrl === HERO ? "object-[78%_50%]" : ""}`} /></div>
           {story.statValue && <div className="soft-float absolute -bottom-6 -left-4 rounded-3xl border-2 border-krust bg-white px-6 py-5 shadow-xl sm:-left-8"><p className="font-display text-5xl text-krust">{story.statValue}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-[.2em] text-cocoa">{story.statLabel}</p></div>}
         </div>
         <div data-reveal style={{ "--reveal-delay": "120ms" } as React.CSSProperties} className="max-w-2xl">
@@ -287,13 +354,13 @@ function Hero() {
           <h1 className="mt-7 text-[clamp(3rem,6.5vw,6.2rem)] leading-[.95] tracking-[-.02em]">{branding.heroTitle}<br /><span className="font-hero shimmer-text inline-block pr-4 text-[clamp(4.4rem,9vw,9rem)] leading-[1.05]">{branding.heroAccent}</span></h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-cocoa">{branding.heroCopy}</p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_rgba(215,38,61,.3)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
+            <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_rgba(236,36,39,.3)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
             <a href="#story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</a>
           </div>
           <div className="mt-10 flex flex-wrap gap-2">{["No MSG", "No bromides", "Eggless options", "GST invoice"].map((t) => <span key={t} className="badge border border-krust/20 bg-white text-krust"><Check size={12} /> {t}</span>)}</div>
         </div>
         <div className="relative mx-auto w-full max-w-[560px]">
-          <div className="reveal relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[40px] border-[6px] border-krust bg-peach shadow-[0_40px_90px_-30px_rgba(163,23,43,.55)]" style={{ animationDelay: "120ms" }}>
+          <div className="reveal relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[40px] border-[6px] border-krust bg-peach shadow-[0_40px_90px_-30px_rgba(176,20,24,.55)]" style={{ animationDelay: "120ms" }}>
             <img src={branding.heroImage || HERO} alt="Freshly baked artisan breads and pastries" className="ken-burns h-full w-full object-cover" />
           </div>
           <div className="soft-float absolute -left-3 top-16 rounded-2xl border-2 border-krust bg-white px-4 py-3 shadow-xl sm:-left-10"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cocoa">Baker&apos;s note</p><p className="font-display text-lg italic">“Patience is an ingredient.”</p></div>
@@ -327,21 +394,22 @@ function ProductCard({ product }: { product: Product }) {
   const qty = mounted ? quantity : 0;
   const add = () => { setQuantity(product.id, variant.id, 1); toast.success(`${product.name} added to basket`); };
   return (
-    <article className="lift group h-full overflow-hidden rounded-[26px] border border-petal bg-white">
-      <div className="relative h-52 overflow-hidden bg-peach">
+    <article className="lift group flex h-full flex-col overflow-hidden rounded-[20px] border border-petal bg-white sm:rounded-[26px]">
+      <div className="relative h-36 overflow-hidden bg-peach sm:h-52">
         <ProductImage product={product} />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/30 to-transparent" />
-        <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-          <span className={`badge ${product.eggless ? "bg-mint text-[#2f7a4a]" : "bg-butter text-[#8a5a13]"}`}>{product.eggless ? "Eggless" : "Contains egg"}</span>
-          {product.featured && <span className="badge bg-krust text-white"><Star size={10} fill="currentColor" /> Bestseller</span>}
+        <div className="absolute left-2 top-2 flex flex-wrap gap-1.5 sm:left-4 sm:top-4 sm:gap-2">
+          <span className={`badge !px-2 !text-[8px] sm:!px-[.7rem] sm:!text-[10px] ${product.eggless ? "bg-mint text-[#2f7a4a]" : "bg-butter text-[#8a5a13]"}`}>{product.eggless ? "Eggless" : "Egg"}</span>
+          {product.featured && <span className="badge !px-2 !text-[8px] bg-krust text-white sm:!px-[.7rem] sm:!text-[10px]"><Star size={10} fill="currentColor" /> <span className="hidden sm:inline">Bestseller</span></span>}
         </div>
       </div>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-krust">{product.category}</p><h3 className="mt-1 text-2xl leading-tight">{product.name}</h3></div><p className="shrink-0 font-display text-xl text-krust">{formatInr(variant.price)}</p></div>
-        <p className="mt-2 min-h-10 text-xs leading-5 text-cocoa">{product.description}</p>
-        <div className="mt-5 flex items-center gap-3">
-          <div className="relative min-w-0 flex-1"><select value={variant.id} onChange={(e) => setVariantId(e.target.value)} aria-label={`Select ${product.name} size`} className="h-11 w-full appearance-none rounded-xl border border-petal bg-cream px-3 pr-8 text-xs font-semibold outline-none focus:border-krust">{product.variants.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatInr(item.price)}</option>)}</select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cocoa" /></div>
-          {qty === 0 ? <button onClick={add} className="h-11 rounded-xl bg-ink px-5 text-xs font-bold text-white transition hover:bg-krust">Add</button> : <div className="flex h-11 items-center rounded-xl bg-krust text-white"><button onClick={() => setQuantity(product.id, variant.id, qty - 1)} aria-label="Decrease quantity" className="grid h-11 w-10 place-items-center"><Minus size={14} /></button><input aria-label="Quantity" inputMode="numeric" value={qty} onChange={(e) => setQuantity(product.id, variant.id, Math.min(100, Math.max(0, Number(e.target.value) || 0)))} className="w-7 bg-transparent text-center text-sm font-bold outline-none" /><button onClick={() => setQuantity(product.id, variant.id, qty + 1)} aria-label="Increase quantity" className="grid h-11 w-10 place-items-center"><Plus size={14} /></button></div>}
+      <div className="flex flex-1 flex-col p-3 sm:p-5">
+        <p className="text-[9px] font-extrabold uppercase tracking-[.18em] text-krust sm:text-[10px]">{product.category}</p>
+        <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><h3 className="text-[15px] leading-snug sm:text-2xl sm:leading-tight">{product.name}</h3><p className="shrink-0 font-display text-lg font-extrabold text-krust sm:text-xl">{formatInr(variant.price)}</p></div>
+        <p className="mt-2 hidden min-h-10 text-xs leading-5 text-cocoa sm:block">{product.description}</p>
+        <div className="mt-auto flex flex-col gap-2 pt-3 sm:flex-row sm:items-center sm:gap-3 sm:pt-5">
+          <div className="relative min-w-0 flex-1"><select value={variant.id} onChange={(e) => setVariantId(e.target.value)} aria-label={`Select ${product.name} size`} className="h-9 w-full appearance-none rounded-lg border border-petal bg-cream px-2.5 pr-7 text-[11px] font-bold outline-none focus:border-krust sm:h-11 sm:rounded-xl sm:px-3 sm:text-xs">{product.variants.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatInr(item.price)}</option>)}</select><ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-cocoa" /></div>
+          {qty === 0 ? <button onClick={add} className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-krust px-5 text-xs font-extrabold text-white transition hover:bg-krust-deep sm:h-11 sm:rounded-xl"><Plus size={14} /> Add</button> : <div className="flex h-9 items-center justify-between rounded-lg bg-krust text-white sm:h-11 sm:rounded-xl"><button onClick={() => setQuantity(product.id, variant.id, qty - 1)} aria-label="Decrease quantity" className="grid h-full w-10 place-items-center"><Minus size={14} /></button><input aria-label="Quantity" inputMode="numeric" value={qty} onChange={(e) => setQuantity(product.id, variant.id, Math.min(100, Math.max(0, Number(e.target.value) || 0)))} className="w-7 bg-transparent text-center text-sm font-extrabold outline-none" /><button onClick={() => setQuantity(product.id, variant.id, qty + 1)} aria-label="Increase quantity" className="grid h-full w-10 place-items-center"><Plus size={14} /></button></div>}
         </div>
       </div>
     </article>
@@ -371,7 +439,7 @@ function StoryCarousel({ slides }: { slides: CarouselSlide[] }) {
           <SectionHeading eyebrow="Inside the bakehouse" title="Craft, told in layers." />
           <div className="flex shrink-0 gap-2"><button onClick={() => move(-1)} aria-label="Previous slide" className="grid h-12 w-12 place-items-center rounded-full border-2 border-krust bg-white text-krust transition hover:bg-blush"><ArrowLeft size={18} /></button><button onClick={() => move(1)} aria-label="Next slide" className="grid h-12 w-12 place-items-center rounded-full bg-krust text-white transition hover:bg-krust-deep"><ArrowRight size={18} /></button></div>
         </div>
-        <article key={slide.id} className="grid overflow-hidden rounded-[34px] border-[5px] border-krust bg-white shadow-[0_34px_80px_-30px_rgba(163,23,43,.45)] lg:grid-cols-[1.05fr_.95fr]">
+        <article key={slide.id} className="grid overflow-hidden rounded-[34px] border-[5px] border-krust bg-white shadow-[0_34px_80px_-30px_rgba(176,20,24,.45)] lg:grid-cols-[1.05fr_.95fr]">
           <div className="relative min-h-[300px] overflow-hidden bg-peach sm:min-h-[400px]"><img src={slide.imageUrl || HERO} alt={slide.title} className="slide-image absolute inset-0 h-full w-full object-cover" /><span className="badge absolute left-5 top-5 bg-krust text-white">{String(index + 1).padStart(2, "0")} / {String(count).padStart(2, "0")}</span></div>
           <div className="slide-copy flex items-center border-t-[5px] border-krust p-8 sm:p-12 lg:border-l-[5px] lg:border-t-0 lg:p-16">
             <div>
@@ -408,7 +476,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
     try {
       const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         customer: field("name"), phone: field("phone"), whatsapp: field("whatsapp"), email: field("email"), address: field("address"), landmark: field("landmark"), pincode: field("pincode"),
-        deliveryDate: field("date"), slot: field("slot"), paymentMethod: payment, note: field("note"),
+        deliveryDate: field("date"), paymentMethod: payment, note: field("note"),
         lines: resolved.map(({ line }) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity })),
       }) });
       const body = (await response.json()) as { id: string; token: string; total: number; error?: string };
@@ -424,14 +492,14 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const waNumber = socialLinks.whatsapp.match(/wa\.me\/(\d+)/)?.[1] ?? "919840477330";
   return <div className="fixed inset-0 z-50 flex justify-end bg-ink/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Checkout"><button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="Close checkout" /><aside className="relative h-full w-full max-w-[610px] overflow-y-auto bg-cream shadow-2xl" style={{ animation: "slide-in-right .45s cubic-bezier(.2,.8,.2,1) both" }}>
     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Secure order</p><h2 className="text-3xl">{step === "details" ? "Checkout" : "Order confirmed"}</h2></div><button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-petal bg-white" aria-label="Close"><X size={18} /></button></div>
-    {step === "success" && placed ? <div className="reveal flex min-h-[75vh] flex-col items-center justify-center px-7 text-center"><div className="pulse-ring grid h-20 w-20 place-items-center rounded-full bg-krust text-white"><Check size={36} /></div><p className="eyebrow mt-7">Order {placed.id}</p><h3 className="mt-3 text-5xl leading-none">Your bake is <span className="font-hero text-krust">booked.</span></h3><p className="mt-5 max-w-md text-sm leading-6 text-cocoa">We&apos;ve received your order. The bakery will confirm your delivery slot shortly on WhatsApp.</p><div className="mt-7 w-full max-w-sm rounded-2xl border-2 border-krust bg-white p-5 text-left"><div className="flex justify-between text-sm"><span className="text-cocoa">Order total</span><span className="font-bold">{formatInr(placed.total)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-cocoa">Payment</span><span className="font-semibold">{payment === "PAY_ON_DELIVERY" ? "Pay on delivery" : payment}</span></div></div><div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2"><Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link><a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
+    {step === "success" && placed ? <div className="reveal flex min-h-[75vh] flex-col items-center justify-center px-7 text-center"><div className="pulse-ring grid h-20 w-20 place-items-center rounded-full bg-krust text-white"><Check size={36} /></div><p className="eyebrow mt-7">Order {placed.id}</p><h3 className="mt-3 text-5xl leading-none">Your bake is <span className="font-hero text-krust">booked.</span></h3><p className="mt-5 max-w-md text-sm leading-6 text-cocoa">We&apos;ve received your order. The bakery will confirm your delivery shortly on WhatsApp.</p><div className="mt-7 w-full max-w-sm rounded-2xl border-2 border-krust bg-white p-5 text-left"><div className="flex justify-between text-sm"><span className="text-cocoa">Order total</span><span className="font-bold">{formatInr(placed.total)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-cocoa">Payment</span><span className="font-semibold">{payment === "PAY_ON_DELIVERY" ? "Pay on delivery" : payment}</span></div></div><div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2"><Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link><a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
     <form onSubmit={submit} className="px-5 py-7 sm:px-8">
       <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex justify-between gap-3 text-xs"><span className="text-cocoa">{line.quantity} × {product.name} <span className="opacity-60">({variant.name})</span></span><span className="font-semibold">{formatInr(variant.price * line.quantity)}</span></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
       <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required /></div>
-      <SectionTitle number="02" title="Delivery slot" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label><span className="label">Time slot</span><select name="slot" required className="input"><option>10:00 AM – 1:00 PM</option><option>2:00 PM – 5:00 PM</option><option>5:00 PM – 8:00 PM</option></select></label><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
+      <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
       <SectionTitle number="03" title="Payment" /><div className="grid gap-3 sm:grid-cols-3">{([["UPI", "UPI QR", "Scan & pay"], ["ONLINE", "Online", "Card / netbanking"], ["PAY_ON_DELIVERY", "Pay on delivery", "Cash or UPI at door"]] as const).map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
       {error && <p className="mt-6 rounded-xl border border-krust/30 bg-blush p-4 text-xs font-semibold text-krust-deep">{error}</p>}
-      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(215,38,61,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>Place order · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
+      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(236,36,39,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>Place order · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
       {subtotal < settings.minimumOrder && <p className="mt-3 text-center text-xs font-semibold text-krust">Minimum order for delivery is {formatInr(settings.minimumOrder)}.</p>}
       <p className="mt-3 text-center text-[10px] leading-4 text-cocoa">By placing this order, you agree to the delivery and cancellation policy. We never store card details.</p>
     </form>}

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatInr } from "@/lib/gst";
 import { payOnline } from "@/lib/razorpay-client";
+import { downloadReceiptFor } from "@/lib/receipt-pdf";
 import type { CustomerOrder } from "@/lib/store-core";
 
 type GoogleId = {
@@ -63,6 +64,8 @@ function OrderCard({ order, online = false }: { order: CustomerOrder; online?: b
   const paid = order.paymentStatus === "PAID";
   const refresh = useCustomerStore((s) => s.refresh);
   const [paying, setPaying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const download = async () => { setSaving(true); try { await downloadReceiptFor(order.id, order.token); } catch (e) { toast.error((e as Error).message); } setSaving(false); };
   const canPay = online && !paid && !cancelled && order.paymentMethod === "RAZORPAY";
   const pay = async () => {
     setPaying(true);
@@ -86,7 +89,7 @@ function OrderCard({ order, online = false }: { order: CustomerOrder; online?: b
         </div>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {paid ? <Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-krust px-4 text-xs font-extrabold text-white hover:bg-krust-deep"><Download size={13} /> Download receipt</Link>
+        {paid ? <><button onClick={() => void download()} disabled={saving} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-krust px-4 text-xs font-extrabold text-white hover:bg-krust-deep disabled:opacity-60"><Download size={13} /> {saving ? "Preparing…" : "Download receipt"}</button><Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> View</Link></>
           : <Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> GST invoice</Link>}
         {canPay && <button onClick={() => void pay()} disabled={paying} className="inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-krust px-4 text-xs font-extrabold text-krust hover:bg-blush disabled:opacity-60"><CreditCard size={13} /> {paying ? "Opening…" : `Pay ${formatInr(order.total)} now`}</button>}
         {paid && order.paidAt && <span className="text-[11px] font-semibold text-[#2f7a4a]">Paid {new Date(order.paidAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>}

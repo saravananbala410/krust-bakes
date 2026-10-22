@@ -88,7 +88,7 @@ export async function currentCustomer(request: Request): Promise<Customer | null
   return readCustomer(session.customer_id);
 }
 
-const toCustomerOrder = (o: StoreOrder): CustomerOrder => ({ id: o.id, token: o.token, createdAt: o.createdAt, deliveryDate: o.deliveryDate, status: o.status, paymentStatus: o.paymentStatus, paymentMethod: o.paymentMethod, total: o.total, items: o.items, lines: o.lines, address: o.address });
+const toCustomerOrder = (o: StoreOrder): CustomerOrder => ({ id: o.id, token: o.token, createdAt: o.createdAt, deliveryDate: o.deliveryDate, status: o.status, paymentStatus: o.paymentStatus, paymentMethod: o.paymentMethod, total: o.total, items: o.items, lines: o.lines, address: o.address, paymentId: o.paymentId, paidAt: o.paidAt });
 
 /** Orders placed while signed in, plus earlier guest orders that used the same (Google-verified) email. */
 export async function customerOrders(customer: Customer) {

@@ -1,0 +1,7 @@
+# Copy this file to ".dev.vars" (same folder) and paste your Razorpay TEST keys.
+# Razorpay Dashboard → Test Mode → Account & Settings → API Keys → Generate Key.
+# .dev.vars is git-ignored, so your secret never goes to GitHub.
+RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxxx
+RAZORPAY_KEY_SECRET=paste_your_key_secret_here
+# Optional: only needed if you add a webhook (see the setup steps).
+RAZORPAY_WEBHOOK_SECRET=

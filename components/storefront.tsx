@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
 import { createContext, FormEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
 import { useCartStore } from "@/lib/cart-store";
 import { useAppStore } from "@/lib/app-store";
 import { useCustomerStore } from "@/lib/customer-store";
+import { payOnline } from "@/lib/razorpay-client";
 import type { CarouselSlide, PublicConfig } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
 import { AccountSheet } from "./customer-account";
@@ -15,6 +16,11 @@ import { socialIcons, socialLabels, WhatsAppIcon } from "./social-icons";
 
 const HERO = "/brand/krust-hero.png";
 const ConfigContext = createContext<PublicConfig | null>(null);
+export type StorePage = "home" | "shop" | "story";
+const PageContext = createContext<StorePage>("home");
+/** Where "order now" buttons point: the menu on this page, or the shop page. */
+const useShopHref = () => (useContext(PageContext) === "story" ? "/shop" : "#menu");
+const NAV: Array<[string, string]> = [["/shop", "Shop"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/#reviews", "Reviews"], ["#visit", "Visit"]];
 const useConfig = () => useContext(ConfigContext)!;
 const noopSubscribe = () => () => {};
 /** False during SSR and hydration, true afterwards: keeps the persisted cart from causing hydration mismatches. */
@@ -51,18 +57,19 @@ function useScrollReveal(key: string) {
   }, [key]);
 }
 
-export function Storefront({ initialConfig }: { initialConfig: PublicConfig }) {
+/** `initialCategory` comes from /shop?category=… so the shop opens pre-filtered. */
+export function Storefront({ initialConfig, page = "home", initialCategory }: { initialConfig: PublicConfig; page?: StorePage; initialCategory?: string }) {
   const live = useAppStore((state) => (state.loaded ? state.config : null));
   const refresh = useAppStore((state) => state.refresh);
   const refreshCustomer = useCustomerStore((state) => state.refresh);
   useEffect(() => { void refresh(); void refreshCustomer(); }, [refresh, refreshCustomer]);
-  return <ConfigContext.Provider value={live ?? initialConfig}><StorefrontPage /></ConfigContext.Provider>;
+  return <ConfigContext.Provider value={live ?? initialConfig}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} /></PageContext.Provider></ConfigContext.Provider>;
 }
 
-function StorefrontPage() {
+function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCategory?: string }) {
   const config = useConfig();
   const { branding, settings, socialLinks } = config;
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState(initialCategory ?? "All");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const mounted = useHydrated();
@@ -79,6 +86,7 @@ function StorefrontPage() {
   useScrollReveal(`${category}|${search}|${config.products.length}|${mounted}`);
 
   const pickCategory = (name: string) => { setCategory(name); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); };
+  const isActive = (href: string) => (href === "/shop" && page === "shop") || (href === "/our-story" && page === "story");
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-cream pb-28">
@@ -91,7 +99,7 @@ function StorefrontPage() {
             <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" /><p className="hidden text-[9px] font-semibold uppercase tracking-[.3em] text-cocoa sm:block">{branding.tagline}</p></div>
           </Link>
           <nav className="hidden items-center gap-8 text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa lg:flex">
-            {[["#menu", "Shop"], ["#collections", "Collections"], ["#story", "Our story"], ["#reviews", "Reviews"], ["#visit", "Visit"]].map(([href, label]) => <a key={href} href={href} className="relative transition hover:text-krust after:absolute after:-bottom-1 after:left-0 after:h-px after:w-0 after:bg-krust after:transition-all hover:after:w-full">{label}</a>)}
+            {NAV.map(([href, label]) => <a key={href} href={href} className={`relative transition hover:text-krust after:absolute after:-bottom-1 after:left-0 after:h-px after:bg-krust after:transition-all hover:after:w-full ${isActive(href) ? "text-krust after:w-full" : "after:w-0"}`}>{label}</a>)}
           </nav>
           <div className="flex items-center gap-2">
             <SocialRow links={socialLinks} className="hidden xl:flex" small />
@@ -103,10 +111,12 @@ function StorefrontPage() {
             <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu" className="grid h-11 w-11 place-items-center rounded-full border border-petal bg-white lg:hidden"><Menu size={19} /></button>
           </div>
         </div>
-        {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold lg:hidden"><div className="flex flex-col gap-4">{[["#menu", "Shop"], ["#collections", "Collections"], ["#story", "Our story"], ["#reviews", "Reviews"], ["#visit", "Visit us"]].map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
+        {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold lg:hidden"><div className="flex flex-col gap-4">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={isActive(href) ? "text-krust" : ""}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
       </header>
 
-      <Hero />
+      {page === "home" ? <Hero /> : <PageBanner page={page} />}
+
+      {page === "home" && <>
 
       <section className="border-y border-petal/70 bg-white">
         <div className="mx-auto grid max-w-[1440px] grid-cols-2 md:grid-cols-4">
@@ -136,14 +146,16 @@ function StorefrontPage() {
         </div>
       </section>
 
-      {featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
+      </>}
+
+      {page !== "story" && featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
         <SectionHeading eyebrow="Bestsellers" title="The ones they come back for" />
         <div className="no-scrollbar -mx-5 mt-10 flex snap-x gap-4 overflow-x-auto px-5 pb-4">
           {featured.map((p) => <div key={p.id} className="w-[200px] shrink-0 snap-start sm:w-[290px]"><ProductCard product={p} /></div>)}
         </div>
       </section>}
 
-      <section id="menu" className="mx-auto max-w-[1440px] px-5 py-20 lg:px-10 lg:py-28">
+      {page !== "story" && <section id="menu" className="mx-auto max-w-[1440px] px-5 py-20 lg:px-10 lg:py-28">
         <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <SectionHeading eyebrow="The daily bake" title="Choose your favourites." copy="All prices include GST. Pick a size, set the quantity and your total updates instantly." />
           <label className="flex h-12 w-full items-center gap-3 rounded-full border border-petal bg-white px-5 shadow-sm transition focus-within:border-krust lg:w-80"><Search size={17} className="text-cocoa" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the bake…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-cocoa/60" /></label>
@@ -155,7 +167,9 @@ function StorefrontPage() {
           {filtered.map((product, i) => <div key={product.id} data-reveal style={{ "--reveal-delay": `${(i % 4) * 60}ms` } as React.CSSProperties}><ProductCard product={product} /></div>)}
         </div>
         {filtered.length === 0 && <div className="mt-8 rounded-3xl border border-dashed border-petal py-20 text-center text-sm text-cocoa">Nothing matched that search. Try another bake.</div>}
-      </section>
+      </section>}
+
+      {page !== "shop" && <>
 
       <StoryCarousel slides={config.slides.filter((s) => s.active)} />
 
@@ -164,7 +178,7 @@ function StorefrontPage() {
       <section className="mx-auto max-w-[1440px] px-5 py-20 lg:px-10 lg:py-28">
         <SectionHeading eyebrow="How it works" title="From our oven to your table" center />
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {([[ShoppingBag, "Pick your bakes", "Browse today's menu and add favourites to your basket."], [Clock3, "Choose a slot", "Select a delivery date and a time window that suits you."], [ChefHat, "We bake fresh", "Your order is baked and packed the same morning."], [Truck, "Doorstep delivery", "Delivered warm with a GST invoice for every order."]] as const).map(([Icon, title, copy], i) => (
+          {([[ShoppingBag, "Pick your bakes", "Browse today's menu and add favourites to your basket."], [Clock3, "Choose a date", "Pick the delivery day that suits you."], [ChefHat, "We bake fresh", "Your order is baked and packed the same morning."], [Truck, "Doorstep delivery", "Delivered warm with a GST invoice for every order."]] as const).map(([Icon, title, copy], i) => (
             <div key={title} data-reveal style={{ "--reveal-delay": `${i * 90}ms` } as React.CSSProperties} className="lift relative rounded-[26px] border border-petal bg-white p-7">
               <span className="font-display absolute right-6 top-5 text-5xl text-petal">0{i + 1}</span>
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blush text-krust"><Icon size={21} /></span>
@@ -176,6 +190,9 @@ function StorefrontPage() {
       </section>
 
       <Reviews />
+      </>}
+
+      {page === "home" && <>
 
       <section className="overflow-hidden border-y border-petal bg-white py-9">
         <p className="eyebrow mb-5 text-center">Trusted by</p>
@@ -193,10 +210,11 @@ function StorefrontPage() {
           ))}
         </div>
       </section>}
+      </>}
 
       <Footer />
 
-      {socialLinks.whatsapp && <WhatsAppFab href={socialLinks.whatsapp} note={branding.whatsappNote} raised={cartItems > 0} />}
+      {socialLinks.whatsapp && <WhatsAppFab href={socialLinks.whatsapp} raised={cartItems > 0} />}
 
       {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_rgba(236,36,39,.14)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-4">
@@ -206,7 +224,7 @@ function StorefrontPage() {
         </div>
       </div>}
       {checkoutOpen && <CheckoutSheet onClose={() => setCheckoutOpen(false)} />}
-      <AccountSheetHost clientId={settings.googleClientId} />
+      <AccountSheetHost clientId={settings.googleClientId} online={!!config.payments?.razorpay} />
     </main>
   );
 }
@@ -216,6 +234,7 @@ function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice
 /** Social proof: rating summary card plus a rotating spotlight review. */
 function Reviews() {
   const { testimonials, branding } = useConfig();
+  const shopHref = useShopHref();
   const items = testimonials.filter((t) => t.active);
   const [index, setIndex] = useState(0);
   const count = items.length;
@@ -243,7 +262,7 @@ function Reviews() {
             </div>
             <div className="mt-10">
               <div className="flex -space-x-3">{items.slice(0, 5).map((t) => <span key={t.id} className="grid h-11 w-11 place-items-center rounded-full border-2 border-krust bg-white text-xs font-extrabold text-krust">{initials(t.name)}</span>)}</div>
-              <a href="#menu" className="mt-6 inline-flex h-12 items-center gap-2 rounded-full bg-white px-6 text-sm font-extrabold text-krust transition hover:-translate-y-0.5">Taste what they love <ArrowRight size={16} /></a>
+              <a href={shopHref} className="mt-6 inline-flex h-12 items-center gap-2 rounded-full bg-white px-6 text-sm font-extrabold text-krust transition hover:-translate-y-0.5">Taste what they love <ArrowRight size={16} /></a>
             </div>
           </div>
           <div data-reveal style={{ "--reveal-delay": "120ms" } as React.CSSProperties} className="flex flex-col rounded-[32px] border-[3px] border-krust bg-white p-8 shadow-[0_30px_70px_-35px_rgba(43,26,20,.45)] sm:p-12">
@@ -289,7 +308,7 @@ function Footer() {
             <a href={`mailto:${branding.email}`} className="flex items-center gap-3 hover:text-krust"><span className="grid h-9 w-9 place-items-center rounded-full bg-white text-krust"><Mail size={15} /></span>{branding.email}</a>
           </div>
         </div>
-        <div><p className="eyebrow">Explore</p><div className="mt-5 flex flex-col gap-3 text-sm font-semibold text-cocoa">{[["#menu", "Shop the bake"], ["#collections", "Collections"], ["#story", "Our story"], ["#reviews", "Reviews"], ["#visit", "Visit us"]].map(([h, l]) => <a key={h} href={h} className="transition hover:translate-x-1 hover:text-krust">{l}</a>)}</div></div>
+        <div><p className="eyebrow">Explore</p><div className="mt-5 flex flex-col gap-3 text-sm font-semibold text-cocoa">{[["/shop", "Shop the bake"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/#reviews", "Reviews"], ["#visit", "Visit us"]].map(([h, l]) => <a key={h} href={h} className="transition hover:translate-x-1 hover:text-krust">{l}</a>)}</div></div>
         <div className="overflow-hidden rounded-[28px] border-[3px] border-krust bg-white shadow-[0_24px_60px_-30px_rgba(236,36,39,.55)]">
           <iframe title="Krust on Google Maps" src={mapEmbedSrc(branding.mapsEmbedUrl, branding.address)} className="h-56 w-full border-0 sm:h-64" loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -306,18 +325,17 @@ function Footer() {
   );
 }
 
-/** Floating WhatsApp button with a connected note card for bulk orders. */
-function WhatsAppFab({ href, note, raised }: { href: string; note: string; raised: boolean }) {
+/** Floating WhatsApp button with a small connected label for bulk orders. */
+function WhatsAppFab({ href, raised }: { href: string; raised: boolean }) {
   const [open, setOpen] = useState(true);
   return (
     <div className={`fixed right-4 z-40 flex flex-col items-end transition-all sm:right-6 ${raised ? "bottom-28" : "bottom-6"}`}>
-      {open && note && <div className="reveal relative mb-3 w-[240px] rounded-2xl border-2 border-[#25d366] bg-white p-4 pr-8 shadow-[0_20px_45px_-15px_rgba(37,211,102,.55)] sm:w-[270px]">
-        <button onClick={() => setOpen(false)} aria-label="Hide message" className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full text-cocoa hover:bg-cream"><X size={13} /></button>
-        <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#1a9e4b]">Bulk & custom orders</p>
-        <a href={href} target="_blank" rel="noreferrer" className="mt-1 block text-[13px] font-bold leading-5 text-ink hover:text-[#1a9e4b]">{note}</a>
-        <span className="absolute -bottom-[9px] right-6 h-4 w-4 rotate-45 border-b-2 border-r-2 border-[#25d366] bg-white" />
+      {open && <div className="reveal relative mb-3 flex items-center gap-2 rounded-full border-2 border-[#25d366] bg-white py-2 pl-4 pr-2 shadow-[0_16px_36px_-14px_rgba(37,211,102,.6)]">
+        <a href={href} target="_blank" rel="noreferrer" className="text-[11px] font-extrabold uppercase tracking-[.14em] text-[#1a9e4b]">Bulk &amp; custom orders</a>
+        <button onClick={() => setOpen(false)} aria-label="Hide label" className="grid h-6 w-6 place-items-center rounded-full text-cocoa hover:bg-cream"><X size={12} /></button>
+        <span className="absolute -bottom-[9px] right-5 h-4 w-4 rotate-45 border-b-2 border-r-2 border-[#25d366] bg-white" />
       </div>}
-      <a href={href} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className="pulse-ring grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-xl transition hover:scale-105"><WhatsAppIcon size={27} /></a>
+      <a href={href} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp for bulk and custom orders" className="pulse-ring grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-xl transition hover:scale-105"><WhatsAppIcon size={27} /></a>
     </div>
   );
 }
@@ -348,6 +366,23 @@ function StorySection() {
   );
 }
 
+function PageBanner({ page }: { page: Exclude<StorePage, "home"> }) {
+  const copy = page === "shop"
+    ? { eyebrow: "The daily bake", title: "Shop", accent: "fresh.", text: "Breads, tea cakes, cookies, brownies and savouries, baked this morning. All prices include GST." }
+    : { eyebrow: "From Melbourne to Madras", title: "Our", accent: "story.", text: "Sixteen years at the bench, one standard: honest ingredients, patient technique and everything made fresh." };
+  return (
+    <section className="pastel-wash relative isolate overflow-hidden border-b border-petal/70">
+      <div className="grain absolute inset-0 -z-10 opacity-60" />
+      <div className="reveal mx-auto max-w-[1440px] px-5 py-16 lg:px-10 lg:py-20">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[.16em] text-cocoa hover:text-krust"><ArrowLeft size={14} /> Home</Link>
+        <p className="eyebrow mt-6">{copy.eyebrow}</p>
+        <h1 className="mt-3 text-[clamp(2.8rem,6vw,5.2rem)] leading-[1]">{copy.title} <span className="font-hero shimmer-text">{copy.accent}</span></h1>
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-cocoa">{copy.text}</p>
+      </div>
+    </section>
+  );
+}
+
 function Hero() {
   const { branding } = useConfig();
   return (
@@ -360,9 +395,9 @@ function Hero() {
           <p className="mt-6 max-w-xl text-lg leading-8 text-cocoa">{branding.heroCopy}</p>
           <div className="mt-9 flex flex-wrap gap-3">
             <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_rgba(236,36,39,.3)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
-            <a href="#story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</a>
+            <a href="/our-story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</a>
           </div>
-          <div className="mt-10 flex flex-wrap gap-2">{["No MSG", "No bromides", "Eggless options", "GST invoice"].map((t) => <span key={t} className="badge border border-krust/20 bg-white text-krust"><Check size={12} /> {t}</span>)}</div>
+          <div className="mt-10 flex flex-wrap gap-2">{["No MSG", "No bromides", "Eggless options", "No artificial colours"].map((t) => <span key={t} className="badge border border-krust/20 bg-white text-krust"><Check size={12} /> {t}</span>)}</div>
         </div>
         <div className="relative mx-auto w-full max-w-[560px]">
           <div className="reveal relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[40px] border-[6px] border-krust bg-peach shadow-[0_40px_90px_-30px_rgba(176,20,24,.55)]" style={{ animationDelay: "120ms" }}>
@@ -384,9 +419,9 @@ function AccountButton() {
   </button>;
 }
 
-function AccountSheetHost({ clientId }: { clientId: string }) {
+function AccountSheetHost({ clientId, online }: { clientId: string; online: boolean }) {
   const open = useCustomerStore((state) => state.accountOpen);
-  return open ? <AccountSheet clientId={clientId} /> : null;
+  return open ? <AccountSheet clientId={clientId} online={online} /> : null;
 }
 
 function SectionHeading({ eyebrow, title, copy, center = false }: { eyebrow: string; title: string; copy?: string; center?: boolean }) {
@@ -440,6 +475,7 @@ const SLIDE_MS = 6000;
 function StoryCarousel({ slides }: { slides: CarouselSlide[] }) {
   const [current, setCurrent] = useState(0);
   const [paused, setPaused] = useState(false);
+  const shopHref = useShopHref();
   const count = slides.length;
   useEffect(() => {
     if (count < 2 || paused) return;
@@ -465,7 +501,7 @@ function StoryCarousel({ slides }: { slides: CarouselSlide[] }) {
               <h3 className="mt-4 text-4xl font-bold leading-[1.05] sm:text-5xl">{slide.title}</h3>
               <div className="gold-rule my-6 w-28" />
               <p className="max-w-lg text-base leading-8 text-cocoa">{slide.copy}</p>
-              {slide.ctaLabel && <a href="#menu" className="action mt-8">{slide.ctaLabel} <ArrowRight size={15} /></a>}
+              {slide.ctaLabel && <a href={shopHref} className="action mt-8">{slide.ctaLabel} <ArrowRight size={15} /></a>}
               <div className="mt-9 flex items-center gap-2">{slides.map((item, i) => <button key={item.id} onClick={() => setCurrent(i)} aria-label={`Go to slide ${i + 1}`} className={`relative h-2 overflow-hidden rounded-full transition-all ${i === index ? "w-14 bg-petal" : "w-2 bg-petal hover:bg-krust/50"}`}>{i === index && <span key={`${current}-${paused}`} className={`absolute inset-0 rounded-full bg-krust ${paused || count < 2 ? "" : "slide-progress"}`} style={{ "--slide-ms": `${SLIDE_MS}ms` } as React.CSSProperties} />}</button>)}</div>
             </div>
           </div>
@@ -477,11 +513,26 @@ function StoryCarousel({ slides }: { slides: CarouselSlide[] }) {
 
 function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const { resolved, items, subtotal, gst } = useCartMath();
-  const { settings, socialLinks } = useConfig();
+  const { settings, socialLinks, payments } = useConfig();
+  const online = !!payments?.razorpay;
   const clear = useCartStore((state) => state.clear);
   const { customer, lastDetails, refresh: refreshCustomer, setAccountOpen } = useCustomerStore();
   const [step, setStep] = useState<"details" | "success">("details");
-  const [payment, setPayment] = useState<"UPI" | "ONLINE" | "PAY_ON_DELIVERY">("UPI");
+  type Method = "RAZORPAY" | "UPI" | "ONLINE" | "PAY_ON_DELIVERY";
+  const [payment, setPayment] = useState<Method>(online ? "RAZORPAY" : "UPI");
+  const [payState, setPayState] = useState<"none" | "paying" | "paid" | "unpaid">("none");
+  const [payError, setPayError] = useState("");
+  const methods: Array<[Method, string, string]> = online
+    ? [["RAZORPAY", "Pay online", "UPI, cards, net banking, wallets"], ["PAY_ON_DELIVERY", "Pay on delivery", "Cash or UPI at door"]]
+    : [["UPI", "UPI QR", "Scan & pay"], ["ONLINE", "Online", "Card / netbanking"], ["PAY_ON_DELIVERY", "Pay on delivery", "Cash or UPI at door"]];
+
+  async function pay(order: { id: string; token: string }) {
+    setPayState("paying"); setPayError("");
+    const result = await payOnline(order.id, order.token);
+    if (result.status === "paid") { setPayState("paid"); toast.success("Payment received. Thank you!"); }
+    else { setPayState("unpaid"); if (result.status === "failed") setPayError(result.message); }
+    void refreshCustomer();
+  }
   const [placed, setPlaced] = useState<{ id: string; token: string; total: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -501,6 +552,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
       const body = (await response.json()) as { id: string; token: string; total: number; error?: string };
       if (!response.ok) throw new Error(body.error ?? "Could not place the order");
       setPlaced(body); clear(); setStep("success"); void refreshCustomer();
+      if (payment === "RAZORPAY") void pay(body);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -511,17 +563,20 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const waNumber = socialLinks.whatsapp.match(/wa\.me\/(\d+)/)?.[1] ?? "919840477330";
   return <div className="fixed inset-0 z-50 flex justify-end bg-ink/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Checkout"><button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="Close checkout" /><aside className="relative h-full w-full max-w-[610px] overflow-y-auto bg-cream shadow-2xl" style={{ animation: "slide-in-right .45s cubic-bezier(.2,.8,.2,1) both" }}>
     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Secure order</p><h2 className="text-3xl">{step === "details" ? "Checkout" : "Order confirmed"}</h2></div><button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-petal bg-white" aria-label="Close"><X size={18} /></button></div>
-    {step === "success" && placed ? <div className="reveal flex min-h-[75vh] flex-col items-center justify-center px-7 text-center"><div className="pulse-ring grid h-20 w-20 place-items-center rounded-full bg-krust text-white"><Check size={36} /></div><p className="eyebrow mt-7">Order {placed.id}</p><h3 className="mt-3 text-5xl leading-none">Your bake is <span className="font-hero text-krust">booked.</span></h3><p className="mt-5 max-w-md text-sm leading-6 text-cocoa">We&apos;ve received your order. The bakery will confirm your delivery shortly on WhatsApp.</p><div className="mt-7 w-full max-w-sm rounded-2xl border-2 border-krust bg-white p-5 text-left"><div className="flex justify-between text-sm"><span className="text-cocoa">Order total</span><span className="font-bold">{formatInr(placed.total)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-cocoa">Payment</span><span className="font-semibold">{payment === "PAY_ON_DELIVERY" ? "Pay on delivery" : payment}</span></div></div><div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2"><Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link><a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
+    {step === "success" && placed ? <div className="reveal flex min-h-[75vh] flex-col items-center justify-center px-7 text-center"><div className="pulse-ring grid h-20 w-20 place-items-center rounded-full bg-krust text-white"><Check size={36} /></div><p className="eyebrow mt-7">Order {placed.id}</p><h3 className="mt-3 text-5xl leading-none">Your bake is <span className="font-hero text-krust">booked.</span></h3><p className="mt-5 max-w-md text-sm leading-6 text-cocoa">We&apos;ve received your order. The bakery will confirm your delivery shortly on WhatsApp.</p><div className="mt-7 w-full max-w-sm rounded-2xl border-2 border-krust bg-white p-5 text-left"><div className="flex justify-between text-sm"><span className="text-cocoa">Order total</span><span className="font-bold">{formatInr(placed.total)}</span></div><div className="mt-3 flex justify-between text-sm"><span className="text-cocoa">Payment</span><span className="font-semibold">{payment === "PAY_ON_DELIVERY" ? "Pay on delivery" : payment === "RAZORPAY" ? (payState === "paid" ? "Paid online" : payState === "paying" ? "Waiting for payment…" : "Not paid yet") : payment}</span></div></div>
+    {payment === "RAZORPAY" && payState === "paid" && <p className="mt-4 flex items-center gap-2 rounded-full bg-mint px-4 py-2 text-xs font-bold text-[#2f7a4a]"><Check size={14} /> Payment received</p>}
+    {payment === "RAZORPAY" && payState === "paying" && <p className="mt-4 flex items-center gap-2 text-xs font-bold text-cocoa"><Loader2 size={14} className="animate-spin" /> Complete the payment in the Razorpay window</p>}
+    {payment === "RAZORPAY" && payState === "unpaid" && <div className="mt-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-krust/50 bg-white p-4 text-left"><p className="text-xs font-bold text-krust-deep">{payError || "The payment was not completed."}</p><p className="mt-1 text-[11px] text-cocoa">Your order is saved. You can pay now, or later from My orders.</p><button onClick={() => void pay(placed)} className="action mt-3 w-full justify-center"><CreditCard size={15} /> Pay {formatInr(placed.total)} now</button></div>}<div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2"><Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-white">{payState === "paid" ? <><Download size={15} /> Download receipt</> : "View GST invoice"}</Link><a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
     <form key={customer?.id ?? "guest"} onSubmit={submit} className="px-5 py-7 sm:px-8">
       {customer ? <div className="mb-5 flex items-center gap-3 rounded-2xl bg-mint/70 p-4 text-xs font-bold text-[#2f7a4a]"><Check size={16} /> Signed in as {customer.email}. This order will appear in My orders.</div> : <button type="button" onClick={() => setAccountOpen(true)} className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-krust/40 bg-white p-4 text-left text-xs font-bold text-ink transition hover:border-krust"><span>Sign in with Google to save this order to your account <span className="block font-medium text-cocoa">Or simply continue as a guest below.</span></span><ArrowRight size={16} className="shrink-0 text-krust" /></button>}
       <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex justify-between gap-3 text-xs"><span className="text-cocoa">{line.quantity} × {product.name} <span className="opacity-60">({variant.name})</span></span><span className="font-semibold">{formatInr(variant.price * line.quantity)}</span></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
       <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} defaultValue={lastDetails?.name ?? customer?.name} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required defaultValue={lastDetails?.phone} /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" defaultValue={lastDetails?.whatsapp} /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" defaultValue={customer?.email} readOnly={!!customer} /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" defaultValue={lastDetails?.address} /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required defaultValue={lastDetails?.pincode} /></div>
       <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
-      <SectionTitle number="03" title="Payment" /><div className="grid gap-3 sm:grid-cols-3">{([["UPI", "UPI QR", "Scan & pay"], ["ONLINE", "Online", "Card / netbanking"], ["PAY_ON_DELIVERY", "Pay on delivery", "Cash or UPI at door"]] as const).map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
+      <SectionTitle number="03" title="Payment" /><div className={`grid gap-3 ${methods.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{methods.map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
       {error && <p className="mt-6 rounded-xl border border-krust/30 bg-blush p-4 text-xs font-semibold text-krust-deep">{error}</p>}
-      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(236,36,39,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>Place order · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
+      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(236,36,39,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>{payment === "RAZORPAY" ? "Pay" : "Place order"} · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
       {subtotal < settings.minimumOrder && <p className="mt-3 text-center text-xs font-semibold text-krust">Minimum order for delivery is {formatInr(settings.minimumOrder)}.</p>}
-      <p className="mt-3 text-center text-[10px] leading-4 text-cocoa">By placing this order, you agree to the delivery and cancellation policy. We never store card details.</p>
+      <p className="mt-3 text-center text-[10px] leading-4 text-cocoa">By placing this order, you agree to the delivery and cancellation policy. We never store card details.{payment === "RAZORPAY" && " Payments are processed securely by Razorpay."}</p>
     </form>}
   </aside></div>;
 }

@@ -14,7 +14,7 @@ type AdminRecord = AdminUser & { passwordHash: string; salt: string };
 
 const SESSION_COOKIE = "krust_admin";
 const SESSION_DAYS = 7;
-const DEFAULT_ADMIN = { username: "admin", password: "krust@2026", name: "Jinu" };
+const DEFAULT_ADMIN = { username: "admin", password: "krust2026", name: "Jinu" };
 
 export function database(): D1Database {
   if (!env.DB) throw new HttpError(503, "Database binding `DB` is unavailable. Set \"d1\": \"DB\" in .openai/hosting.json and restart the dev server.");
@@ -44,20 +44,28 @@ const now = () => new Date().toISOString();
 
 // ---------- config (catalogue + content) ----------
 
+export const razorpayKeys = () => (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET } : null);
+const paymentsFlag = () => ({ razorpay: !!razorpayKeys() });
+
 export async function getConfig(): Promise<PublicConfig> {
   await ready();
   const row = await database().prepare("SELECT value FROM kv WHERE key = 'config'").first<{ value: string }>();
   const seed = seedConfig();
   if (!row) {
     await saveConfig(seed);
-    return seed;
+    return { ...seed, payments: paymentsFlag() };
   }
   const stored = JSON.parse(row.value) as Partial<PublicConfig>;
+  // One-time content update: the original GST invoice FAQ becomes the artificial colours FAQ (left alone once edited).
+  const faq4 = stored.faqs?.find((f) => f.id === "f-4" && f.question === "Can I get a GST invoice?");
+  const newFaq4 = seed.faqs.find((f) => f.id === "f-4");
+  if (faq4 && newFaq4) Object.assign(faq4, { question: newFaq4.question, answer: newFaq4.answer });
   // Merge so fields added in later releases get their defaults.
-  return { ...seed, ...stored, settings: { ...seed.settings, ...stored.settings }, branding: { ...seed.branding, ...stored.branding }, socialLinks: { ...seed.socialLinks, ...stored.socialLinks }, story: { ...seed.story, ...stored.story } };
+  return { ...seed, ...stored, payments: paymentsFlag(), settings: { ...seed.settings, ...stored.settings }, branding: { ...seed.branding, ...stored.branding }, socialLinks: { ...seed.socialLinks, ...stored.socialLinks }, story: { ...seed.story, ...stored.story } };
 }
 
-async function saveConfig(config: PublicConfig) {
+async function saveConfig({ payments: _computed, ...config }: PublicConfig) {
+  void _computed;
   await database().prepare("INSERT INTO kv (key, value, updated_at) VALUES ('config', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(JSON.stringify(config), now()).run();
 }
 
@@ -152,12 +160,12 @@ export async function logAudit(actor: string, action: string, entity: string, de
   await database().prepare("INSERT INTO audit (id, at, data) VALUES (?, ?, ?)").bind(entry.id, entry.at, JSON.stringify(entry)).run();
 }
 
-async function readOrder(id: string) {
+export async function readOrder(id: string) {
   const row = await database().prepare("SELECT data, deleted FROM orders WHERE id = ?").bind(id).first<{ data: string; deleted: number }>();
   return row ? { order: JSON.parse(row.data) as StoreOrder, deleted: row.deleted === 1 } : null;
 }
 
-async function writeOrder(order: StoreOrder, deleted: boolean) {
+export async function writeOrder(order: StoreOrder, deleted: boolean) {
   await database().prepare("INSERT INTO orders (id, data, deleted, created_at, customer_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, deleted = excluded.deleted, customer_id = excluded.customer_id").bind(order.id, JSON.stringify(order), deleted ? 1 : 0, order.createdAt, order.customerId ?? null).run();
 }
 
@@ -192,7 +200,7 @@ const placeOrderSchema = z.object({
   pincode: z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a valid 6-digit pincode"),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   slot: z.string().trim().max(60).optional(),
-  paymentMethod: z.enum(["ONLINE", "UPI", "PAY_ON_DELIVERY"]),
+  paymentMethod: z.enum(["ONLINE", "UPI", "PAY_ON_DELIVERY", "RAZORPAY"]),
   note: z.string().trim().max(500).optional(),
   lines: z.array(z.object({ productId: z.string(), variantId: z.string(), quantity: z.number().int().min(1).max(100) })).min(1).max(60),
 });
@@ -201,6 +209,7 @@ export async function placeOrder(input: PlaceOrderInput, customer?: Customer | n
   const parsed = placeOrderSchema.safeParse(input);
   if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid order");
   const data = parsed.data;
+  if (data.paymentMethod === "RAZORPAY" && !razorpayKeys()) throw new HttpError(503, "Online payment is not available right now. Please choose pay on delivery.");
   const config = await getConfig();
   const activeCategories = new Set(config.categories.filter((c) => c.active).map((c) => c.name));
   // Price from the server catalogue, never from the client.

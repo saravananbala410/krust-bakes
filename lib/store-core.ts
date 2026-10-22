@@ -8,7 +8,9 @@ export const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED"] as con
 export type StoreOrder = {
   id: string; token: string; customer: string; phone: string; whatsapp: string; email?: string; address: string; pincode?: string;
   deliveryDate?: string; slot: string; total: number; items: number; status: string; paymentMethod: string; paymentStatus: string;
-  createdAt: string; updatedAt?: string; deletedAt?: string; customerId?: string; lines: OrderLine[]; note?: string; customerNote?: string;
+  createdAt: string; updatedAt?: string; deletedAt?: string; customerId?: string; lines: OrderLine[];
+  /** Razorpay order created for this order, and the captured payment once verified. */
+  razorpayOrderId?: string; paymentId?: string; paidAt?: string; note?: string; customerNote?: string;
 };
 export type AuditEntry = { id: string; at: string; actor: string; actorRole?: AdminRole | "CUSTOMER"; action: string; entity: string; detail: string };
 /** DEV_ADMIN: head of the site, full access. SUPER_ADMIN: business owner view. SALES_ADMIN: orders and payments only. */
@@ -42,16 +44,18 @@ export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRate
 export type PublicConfig = {
   products: Product[]; categories: StoreCategory[]; slides: CarouselSlide[]; testimonials: Testimonial[]; faqs: Faq[];
   settings: StoreSettings; socialLinks: SocialLinks; branding: Branding; story: Story;
+  /** Computed on each request from server secrets; never stored. */
+  payments?: { razorpay: boolean };
 };
 /** Admin-only operational data, loaded after sign-in. */
 /** A shopper signed in with Google. */
 export type Customer = { id: string; email: string; name: string; picture?: string; phone?: string; createdAt: string; lastLoginAt: string };
-export type CustomerOrder = Pick<StoreOrder, "id" | "token" | "createdAt" | "deliveryDate" | "status" | "paymentStatus" | "paymentMethod" | "total" | "items" | "lines" | "address">;
+export type CustomerOrder = Pick<StoreOrder, "id" | "token" | "createdAt" | "deliveryDate" | "status" | "paymentStatus" | "paymentMethod" | "total" | "items" | "lines" | "address" | "paymentId" | "paidAt">;
 export type AdminData = { orders: StoreOrder[]; recycleBin: StoreOrder[]; audit: AuditEntry[]; admins: AdminUser[] };
 
 export type PlaceOrderInput = {
   customer: string; phone: string; whatsapp?: string; email?: string; address: string; landmark?: string; pincode: string;
-  deliveryDate: string; slot?: string; paymentMethod: "ONLINE" | "UPI" | "PAY_ON_DELIVERY"; note?: string;
+  deliveryDate: string; slot?: string; paymentMethod: "ONLINE" | "UPI" | "PAY_ON_DELIVERY" | "RAZORPAY"; note?: string;
   lines: Array<{ productId: string; variantId: string; quantity: number }>;
 };
 
@@ -101,7 +105,7 @@ export function seedConfig(): PublicConfig {
       { id: "f-1", question: "Where do you deliver?", answer: "We deliver across select Chennai zones from our Guindy bakehouse. Enter your pincode at checkout and we will confirm by WhatsApp.", active: true },
       { id: "f-2", question: "Is there a minimum order?", answer: "Home delivery starts at the minimum order value shown in your basket. All prices include GST.", active: true },
       { id: "f-3", question: "Do you have eggless options?", answer: "Yes. Every product is labelled eggless or contains egg, and eggless items are prepared separately.", active: true },
-      { id: "f-4", question: "Can I get a GST invoice?", answer: "Every order comes with a downloadable GST tax invoice showing HSN codes, CGST and SGST.", active: true },
+      { id: "f-4", question: "Do you use artificial colours?", answer: "No. We never add artificial colours. Every colour in our bakes comes from real ingredients like butter, cocoa, fruit and a properly baked crust.", active: true },
     ],
     story: {
       eyebrow: "From Melbourne to Madras", titleStart: "A baker's life,", titleAccent: "folded", titleEnd: "into every layer.",

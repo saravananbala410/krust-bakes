@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, ChefHat, FileText, LogOut, PackageCheck, Search, ShoppingBag, Truck, UserRound, X } from "lucide-react";
+import { ArrowRight, Check, ChefHat, CreditCard, Download, FileText, LogOut, PackageCheck, Search, ShoppingBag, Truck, UserRound, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatInr } from "@/lib/gst";
+import { payOnline } from "@/lib/razorpay-client";
 import type { CustomerOrder } from "@/lib/store-core";
 
 type GoogleId = {
@@ -56,9 +57,21 @@ const STEPS = ["PENDING", "CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVER
 const STEP_LABEL: Record<string, string> = { PENDING: "Order placed", CONFIRMED: "Confirmed", PREPARING: "Baking", OUT_FOR_DELIVERY: "On the way", DELIVERED: "Delivered", CANCELLED: "Cancelled" };
 const STEP_ICON = [ShoppingBag, Check, ChefHat, Truck, PackageCheck];
 
-function OrderCard({ order }: { order: CustomerOrder }) {
+function OrderCard({ order, online = false }: { order: CustomerOrder; online?: boolean }) {
   const step = STEPS.indexOf(order.status as (typeof STEPS)[number]);
   const cancelled = order.status === "CANCELLED";
+  const paid = order.paymentStatus === "PAID";
+  const refresh = useCustomerStore((s) => s.refresh);
+  const [paying, setPaying] = useState(false);
+  const canPay = online && !paid && !cancelled && order.paymentMethod === "RAZORPAY";
+  const pay = async () => {
+    setPaying(true);
+    const result = await payOnline(order.id, order.token);
+    setPaying(false);
+    if (result.status === "paid") toast.success("Payment received. Your receipt is ready.");
+    else if (result.status === "failed") toast.error(result.message);
+    void refresh();
+  };
   return (
     <article className="rounded-2xl border-2 border-petal bg-white p-5 transition hover:border-krust/60">
       <div className="flex items-start justify-between gap-3">
@@ -72,7 +85,12 @@ function OrderCard({ order }: { order: CustomerOrder }) {
           <p className="mt-3 text-xs font-extrabold text-ink">{STEP_LABEL[order.status] ?? order.status} <span className="font-semibold text-cocoa">· Payment {order.paymentStatus.toLowerCase()}</span></p>
         </div>
       )}
-      <Link href={`/invoice/${order.id}?t=${order.token}`} className="mt-4 inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> GST invoice</Link>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {paid ? <Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-krust px-4 text-xs font-extrabold text-white hover:bg-krust-deep"><Download size={13} /> Download receipt</Link>
+          : <Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> GST invoice</Link>}
+        {canPay && <button onClick={() => void pay()} disabled={paying} className="inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-krust px-4 text-xs font-extrabold text-krust hover:bg-blush disabled:opacity-60"><CreditCard size={13} /> {paying ? "Opening…" : `Pay ${formatInr(order.total)} now`}</button>}
+        {paid && order.paidAt && <span className="text-[11px] font-semibold text-[#2f7a4a]">Paid {new Date(order.paidAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>}
+      </div>
     </article>
   );
 }
@@ -96,7 +114,7 @@ function TrackOrder() {
 }
 
 /** Slide-over for customer sign-in, order history and guest tracking. */
-export function AccountSheet({ clientId }: { clientId: string }) {
+export function AccountSheet({ clientId, online = false }: { clientId: string; online?: boolean }) {
   const { customer, orders, setAccountOpen, signOut } = useCustomerStore();
   const close = () => setAccountOpen(false);
   useEffect(() => { const esc = (e: KeyboardEvent) => e.key === "Escape" && setAccountOpen(false); window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [setAccountOpen]);
@@ -109,7 +127,7 @@ export function AccountSheet({ clientId }: { clientId: string }) {
           <div className="min-w-0 flex-1"><p className="truncate text-lg font-extrabold">{customer.name}</p><p className="truncate text-xs font-semibold text-cocoa">{customer.email}</p></div>
           <button onClick={() => void signOut().then(() => toast.success("Signed out"))} className="flex items-center gap-1.5 rounded-full border border-petal px-3 py-2 text-[11px] font-extrabold text-krust hover:border-krust"><LogOut size={13} /> Sign out</button>
         </div>
-        <div className="mt-6 space-y-3">{orders.map((o) => <OrderCard key={o.id} order={o} />)}</div>
+        <div className="mt-6 space-y-3">{orders.map((o) => <OrderCard key={o.id} order={o} online={online} />)}</div>
         {!orders.length && <div className="mt-6 rounded-3xl border-2 border-dashed border-petal bg-white p-10 text-center"><ShoppingBag className="mx-auto text-krust" /><p className="mt-3 font-display text-xl">No orders yet</p><p className="mt-1 text-xs text-cocoa">Your orders will appear here with live status and GST invoices.</p><a href="#menu" onClick={close} className="action mt-5">Start shopping <ArrowRight size={14} /></a></div>}
       </> : <>
         <div className="rounded-3xl border-2 border-krust bg-white p-6 text-center sm:p-8">

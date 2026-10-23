@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+const env = process.env;
 import type { Customer, StoreOrder } from "@/lib/store-core";
 import { database, getConfig, HttpError, logAudit, razorpayKeys, readOrder, ready, writeOrder } from "./store";
 

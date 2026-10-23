@@ -1,4 +1,7 @@
-import { env } from "cloudflare:workers";
+import { sqliteDatabase } from "./db";
+
+// Server secrets and settings come from environment variables (.env locally, hPanel on Hostinger).
+const env = process.env;
 import { z } from "zod";
 import {
   HAMPER_CATEGORY, ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, sellableCatalog, slug,
@@ -16,9 +19,8 @@ const SESSION_COOKIE = "krust_admin";
 const SESSION_DAYS = 7;
 const DEFAULT_ADMIN = { username: "admin", password: "krust2026", name: "Jinu" };
 
-export function database(): D1Database {
-  if (!env.DB) throw new HttpError(503, "Database binding `DB` is unavailable. Set \"d1\": \"DB\" in .openai/hosting.json and restart the dev server.");
-  return env.DB;
+export function database() {
+  return sqliteDatabase();
 }
 
 let schemaReady: Promise<void> | null = null;

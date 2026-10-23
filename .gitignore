@@ -63,3 +63,10 @@ tsconfig.tsbuildinfo
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+# Database files (live data never goes to GitHub)
+/krust-data/
+*.db
+*.db-wal
+*.db-shm
+!.env.example

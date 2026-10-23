@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Native SQLite driver: load it from node_modules at runtime instead of bundling it.
   serverExternalPackages: ["better-sqlite3"],
+  // Don't generate AGENTS.md / CLAUDE.md in the project.
+  agentRules: false,
 };
 
 export default nextConfig;

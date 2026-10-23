@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, ArrowDown, ArrowLeft, ArrowUp, BadgeIndianRupee, Bell, Check, ChevronRight, CircleDollarSign, ClipboardList, Download, Eye, EyeOff, FileClock, FileText, ImageIcon, KeyRound, LayoutDashboard, LockKeyhole, LogOut, Menu, Package, Pencil, Plus, Receipt, RefreshCw, RotateCcw, Search, Settings, Share2, ShieldCheck, ShoppingBag, Star, Tags, Trash2, Upload, UserPlus, Users, X } from "lucide-react";
+import { Gift, Sparkles, Activity, ArrowDown, ArrowLeft, ArrowUp, BadgeIndianRupee, Bell, Check, ChevronRight, CircleDollarSign, ClipboardList, Download, Eye, EyeOff, FileClock, FileText, ImageIcon, KeyRound, LayoutDashboard, LockKeyhole, LogOut, Menu, Package, Pencil, Plus, Receipt, RefreshCw, RotateCcw, Search, Settings, Share2, ShieldCheck, ShoppingBag, Star, Tags, Trash2, Upload, UserPlus, Users, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/app-store";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
-import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRole, type AdminTab, type AdminUser, type AuditEntry, type CarouselSlide, type Faq, type StoreOrder, type TeamMember, type Testimonial } from "@/lib/store-core";
+import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRole, type AdminTab, type AdminUser, type AuditEntry, type CarouselSlide, type Faq, type Festive, type Hamper, type StoreOrder, type TeamMember, type Testimonial } from "@/lib/store-core";
 import type { Product, Variant } from "@/lib/types";
 import { downloadXlsx } from "@/lib/xlsx";
 import { socialIcons, socialLabels } from "./social-icons";
 
 type Tab = AdminTab;
-const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
+const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["Hampers", Gift], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
 const POLL_MS = 15000;
 
 export function AdminDashboard() {
@@ -71,6 +71,7 @@ export function AdminDashboard() {
         {tab === "Recycle bin" && <RecycleBin />}
         {tab === "Products" && <Products />}
         {tab === "Categories" && <Categories />}
+        {tab === "Hampers" && <Hampers />}
         {tab === "GST" && <Gst />}
         {tab === "Customers & payments" && <Customers />}
         {tab === "Content studio" && <ContentStudio />}
@@ -476,6 +477,61 @@ function FaqEditor() {
     <div className="mt-4 space-y-3">{items.map((f) => <article key={f.id} className={`flex flex-col gap-3 rounded-2xl border border-petal bg-white p-5 sm:flex-row sm:items-center ${f.active ? "" : "opacity-60"}`}><div className="min-w-0 flex-1"><p className="font-display text-lg">{f.question}</p><p className="mt-1 text-xs text-cocoa">{f.answer}</p></div><Toggle label={f.active ? "Visible" : "Hidden"} checked={f.active} onChange={(v) => void run({ type: "faq.save", item: { ...f, active: v } })} /><button onClick={() => setEditing(f)} className="rounded-lg bg-krust px-3 py-2 text-[10px] font-bold text-white">Edit</button><button onClick={() => confirm("Delete this question?") && void run({ type: "faq.delete", id: f.id }, "Deleted")} className="rounded-lg bg-ink px-3 py-2 text-[10px] font-bold text-white">Delete</button></article>)}</div>
     {editing && <Drawer title={editing.id ? "Edit question" : "Add question"} onClose={() => setEditing(null)}><form onSubmit={(e) => { e.preventDefault(); void run({ type: "faq.save", item: editing }, "FAQ saved").then((ok) => ok && setEditing(null)); }} className="space-y-4"><Field label="Question" value={editing.question} onChange={(e) => setEditing({ ...editing, question: e.target.value })} required /><label className="block"><span className="label">Answer</span><textarea value={editing.answer} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} rows={5} className="input" required /></label><button className="action h-12 w-full justify-center">Save</button></form></Drawer>}
   </div>;
+}
+
+// ---------- festive hampers ----------
+
+function Hampers() {
+  const { hampers, festive, settings } = useAppStore((s) => s.config);
+  const run = useDispatch();
+  const [editing, setEditing] = useState<Hamper | null>(null);
+  const blank = (): Hamper => ({ id: "", name: "", description: "", imageUrl: "/brand/krust-hero.png", price: 0, gstRate: settings.gstRates.includes(5) ? 5 : settings.gstRates[0] ?? 0, contents: [], badge: "", active: true });
+  return <div className="space-y-6">
+    <Header title="Festive hampers" copy="Gift hampers shown in the Diwali popup and on the shop. Customers open one to see what's inside and add it to their basket." action={<button onClick={() => setEditing(blank())} className="action"><Plus size={15} /> Add hamper</button>} />
+    <FestiveSettings festive={festive} />
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{hampers.map((h) => <article key={h.id} className={`lift overflow-hidden rounded-2xl border-2 border-[#f5c542]/60 bg-white ${h.active ? "" : "opacity-60"}`}>
+      <div className="relative h-40 bg-peach"><img src={h.imageUrl} alt="" className="h-full w-full object-cover" />{h.badge && <span className="badge absolute left-3 top-3 bg-krust text-white">{h.badge}</span>}<span className={`badge absolute right-3 top-3 ${h.active ? "bg-mint text-[#2f7a4a]" : "bg-[#eee] text-[#777]"}`}>{h.active ? "Live" : "Hidden"}</span></div>
+      <div className="p-5"><div className="flex items-start justify-between gap-3"><h3 className="text-xl leading-tight">{h.name}</h3><p className="font-display text-xl text-krust">{formatInr(h.price)}</p></div>
+        <p className="mt-1 text-[11px] text-cocoa">{h.contents.length} items · GST {h.gstRate}%</p>
+        <ul className="mt-3 space-y-1 text-xs text-cocoa">{h.contents.slice(0, 4).map((c) => <li key={c}>• {c}</li>)}{h.contents.length > 4 && <li className="font-bold">+ {h.contents.length - 4} more</li>}</ul>
+        <div className="mt-4 flex items-center gap-2 border-t border-petal pt-4"><Toggle label={h.active ? "Live" : "Hidden"} checked={h.active} onChange={(v) => void run({ type: "hamper.save", hamper: { ...h, active: v } }, v ? "Hamper is live" : "Hamper hidden")} /><button onClick={() => setEditing(h)} className="ml-auto flex items-center gap-1 rounded-lg bg-krust px-3 py-2 text-[10px] font-bold text-white"><Pencil size={12} /> Edit</button><button onClick={() => confirm(`Delete ${h.name}?`) && void run({ type: "hamper.delete", id: h.id }, "Hamper deleted")} aria-label="Delete hamper" className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-white"><Trash2 size={13} /></button></div>
+      </div>
+    </article>)}</div>
+    {!hampers.length && <Empty icon={Gift} text="No hampers yet" />}
+    {editing && <HamperEditor key={editing.id || "new"} hamper={editing} onClose={() => setEditing(null)} />}
+  </div>;
+}
+
+function FestiveSettings({ festive }: { festive: Festive }) {
+  const run = useDispatch();
+  const [f, setF] = useState(festive);
+  return <Panel title="Festive popup & fireworks">
+    <form onSubmit={(e) => { e.preventDefault(); void run({ type: "festive.update", festive: f }, "Festive settings saved"); }} className="space-y-4">
+      <div className="flex flex-wrap gap-6 rounded-xl bg-cream p-4"><Toggle label="Show hamper popup & section" checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} /><Toggle label="Fireworks animation" checked={f.fireworks} onChange={(v) => setF({ ...f, fireworks: v })} /></div>
+      <div className="grid gap-4 sm:grid-cols-2"><Field label="Popup heading" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /><Field label="Popup message" value={f.subtitle} onChange={(e) => setF({ ...f, subtitle: e.target.value })} /><Field label="Show popup after (seconds)" type="number" min={0} max={60} value={f.popupDelaySeconds} onChange={(e) => setF({ ...f, popupDelaySeconds: Number(e.target.value) })} /><Field label="Show again after closing (minutes)" type="number" min={1} max={1440} value={f.repeatMinutes} onChange={(e) => setF({ ...f, repeatMinutes: Number(e.target.value) })} /></div>
+      <button className="action"><Sparkles size={15} /> Save festive settings</button>
+    </form>
+  </Panel>;
+}
+
+function HamperEditor({ hamper, onClose }: { hamper: Hamper; onClose: () => void }) {
+  const { settings, products } = useAppStore((s) => s.config);
+  const run = useDispatch();
+  const [d, setD] = useState(hamper);
+  const [contents, setContents] = useState(hamper.contents.join("\n"));
+  const [pick, setPick] = useState("");
+  const addProduct = () => { const p = products.find((x) => x.id === pick); if (!p) return; const line = `${p.name} (${p.variants[0]?.name ?? ""})`; setContents((c) => (c.trim() ? `${c.trim()}\n${line}` : line)); setPick(""); };
+  const save = async (e: FormEvent) => { e.preventDefault(); const ok = await run({ type: "hamper.save", hamper: { ...d, contents: contents.split("\n").map((x) => x.trim()).filter(Boolean) } }, `${d.name || "Hamper"} saved`); if (ok) onClose(); };
+  return <Drawer title={hamper.id ? "Edit hamper" : "Add hamper"} onClose={onClose}><form onSubmit={save} className="space-y-4">
+    <ImageField label="Hamper photo" value={d.imageUrl} onChange={(v) => setD({ ...d, imageUrl: v })} />
+    <Field label="Hamper name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Grand Diwali Hamper" required />
+    <label className="block"><span className="label">Short description</span><textarea value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} rows={2} className="input" /></label>
+    <div className="grid grid-cols-2 gap-3"><Field label="Price incl. GST (₹)" type="number" min={1} step="0.01" value={d.price || ""} onChange={(e) => setD({ ...d, price: Number(e.target.value) })} required /><label><span className="label">GST rate</span><select value={d.gstRate} onChange={(e) => setD({ ...d, gstRate: Number(e.target.value) })} className="input">{settings.gstRates.map((r) => <option key={r} value={r}>{r}%</option>)}</select></label><Field label="Badge (optional)" value={d.badge ?? ""} onChange={(e) => setD({ ...d, badge: e.target.value })} placeholder="Bestseller" /></div>
+    <div><span className="label">What&apos;s inside (one item per line)</span><textarea value={contents} onChange={(e) => setContents(e.target.value)} rows={7} className="input" placeholder={"Lemon Tea Cake (200g)\nAnzac Cookies (200g)\nFestive gift box"} required />
+      <div className="mt-2 flex gap-2"><select value={pick} onChange={(e) => setPick(e.target.value)} className="input !h-10 text-xs"><option value="">Add a product from the menu…</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.variants[0]?.name}</option>)}</select><button type="button" onClick={addProduct} disabled={!pick} className="action secondary !h-10 shrink-0 disabled:opacity-40"><Plus size={14} /> Add</button></div></div>
+    <Toggle label="Live on the website" checked={d.active} onChange={(v) => setD({ ...d, active: v })} />
+    <button className="action h-12 w-full justify-center"><Check size={15} /> Save hamper</button>
+  </form></Drawer>;
 }
 
 // ---------- social, settings, admins, history ----------

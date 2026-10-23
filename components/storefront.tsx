@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
+import { CakeSlice, Coffee, Cookie, Croissant, Gift, Hamburger, Layers, Pizza, Wheat, ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
 import { createContext, FormEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
@@ -10,9 +10,10 @@ import { useAppStore } from "@/lib/app-store";
 import { useCustomerStore } from "@/lib/customer-store";
 import { payOnline } from "@/lib/razorpay-client";
 import { downloadReceiptFor } from "@/lib/receipt-pdf";
-import type { CarouselSlide, PublicConfig } from "@/lib/store-core";
+import { sellableCatalog, type CarouselSlide, type Hamper, type PublicConfig } from "@/lib/store-core";
+import { DiwaliGarland, FestiveLayer, HamperSection } from "./festive";
 import type { Product } from "@/lib/types";
-import { AccountSheet } from "./customer-account";
+import { AccountSheet, GoogleButton } from "./customer-account";
 import { socialIcons, socialLabels, WhatsAppIcon } from "./social-icons";
 
 const HERO = "/brand/krust-hero.png";
@@ -29,9 +30,17 @@ const useHydrated = () => useSyncExternalStore(noopSubscribe, () => true, () => 
 const localToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
 /** Cart totals against the live catalogue; lines for removed products are ignored. */
+/** A small icon for each category, matched by name so categories added later get one too. */
+const CATEGORY_ICONS: Array<[RegExp, typeof Wheat]> = [
+  [/puff|pastry|flatbread|pita/i, Layers], [/tea ?cake/i, Coffee], [/cake|muffin|brownie/i, CakeSlice], [/biscuit|cookie/i, Cookie],
+  [/roll|croissant/i, Croissant], [/bruschetta|pizza/i, Pizza], [/^buns?$|burger|pav/i, Hamburger], [/bread|loaf|bun/i, Wheat], [/hamper|gift/i, Gift],
+];
+const categoryIcon = (name: string) => CATEGORY_ICONS.find(([re]) => re.test(name))?.[1] ?? ChefHat;
+
 function useCartMath() {
   const lines = useCartStore((state) => state.lines);
-  const { products } = useConfig();
+  const config = useConfig();
+  const products = useMemo(() => sellableCatalog(config), [config]);
   return useMemo(() => {
     const resolved = lines.flatMap((line) => {
       const product = products.find((item) => item.id === line.productId && item.active !== false);
@@ -77,6 +86,10 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
   const checkoutOpen = useCartStore((state) => state.checkoutOpen);
   const setCheckoutOpen = useCartStore((state) => state.setCheckoutOpen);
   const { items, subtotal } = useCartMath();
+  const [hamperOpen, setHamperOpen] = useState(false);
+  const [hamperFocus, setHamperFocus] = useState<Hamper | null>(null);
+  const liveHampers = config.festive.enabled ? config.hampers.filter((h) => h.active) : [];
+  const openHamper = (h: Hamper) => { setHamperFocus(h); setHamperOpen(true); };
 
   const activeCategories = config.categories.filter((item) => item.active);
   const activeNames = new Set(activeCategories.map((item) => item.name));
@@ -114,6 +127,7 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
         </div>
         {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold lg:hidden"><div className="flex flex-col gap-4">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={isActive(href) ? "text-krust" : ""}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
       </header>
+      {config.festive.enabled && <DiwaliGarland />}
 
       {page === "home" ? <Hero /> : <PageBanner page={page} />}
 
@@ -136,8 +150,10 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
           {activeCategories.map((cat, i) => {
             const count = visible.filter((p) => p.category === cat.name).length;
             const tints = ["bg-blush", "bg-peach", "bg-lilac", "bg-mint", "bg-butter"];
+            const Icon = categoryIcon(cat.name);
             return (
               <button key={cat.id} onClick={() => pickCategory(cat.name)} data-reveal style={{ "--reveal-delay": `${(i % 5) * 70}ms` } as React.CSSProperties} className={`lift group relative overflow-hidden rounded-[22px] border border-white p-5 text-left ${tints[i % tints.length]}`}>
+                <span className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-krust shadow-[0_6px_16px_rgba(236,36,39,.15)] transition duration-500 group-hover:rotate-12 group-hover:scale-110 group-hover:bg-krust group-hover:text-white"><Icon size={20} strokeWidth={2} /></span>
                 <span className="badge bg-white/80 text-krust">{count} items</span>
                 <p className="mt-8 font-display text-xl leading-tight sm:text-2xl">{cat.name}</p>
                 <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[.16em] text-krust">Shop <ArrowRight size={13} className="transition group-hover:translate-x-1" /></span>
@@ -148,6 +164,8 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
       </section>
 
       </>}
+
+      {page !== "story" && liveHampers.length > 0 && <HamperSection festive={config.festive} hampers={liveHampers} onOpen={openHamper} />}
 
       {page !== "story" && featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
         <SectionHeading eyebrow="Bestsellers" title="The ones they come back for" />
@@ -225,6 +243,7 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
         </div>
       </div>}
       {checkoutOpen && <CheckoutSheet onClose={() => setCheckoutOpen(false)} />}
+      <FestiveLayer festive={config.festive} hampers={liveHampers} open={hamperOpen} setOpen={setHamperOpen} focus={hamperFocus} setFocus={setHamperFocus} raised={cartItems > 0} />
       <AccountSheetHost clientId={settings.googleClientId} online={!!config.payments?.razorpay} />
     </main>
   );
@@ -516,6 +535,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const { resolved, items, subtotal, gst } = useCartMath();
   const { settings, socialLinks, payments } = useConfig();
   const online = !!payments?.razorpay;
+  const needsSignIn = !!settings.googleClientId;
   const clear = useCartStore((state) => state.clear);
   const { customer, lastDetails, refresh: refreshCustomer, setAccountOpen } = useCustomerStore();
   const [step, setStep] = useState<"details" | "success">("details");
@@ -569,8 +589,15 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
     {payment === "RAZORPAY" && payState === "paying" && <p className="mt-4 flex items-center gap-2 text-xs font-bold text-cocoa"><Loader2 size={14} className="animate-spin" /> Complete the payment in the Razorpay window</p>}
     {payment === "RAZORPAY" && payState === "unpaid" && <div className="mt-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-krust/50 bg-white p-4 text-left"><p className="text-xs font-bold text-krust-deep">{payError || "The payment was not completed."}</p><p className="mt-1 text-[11px] text-cocoa">Your order is saved. You can pay now, or later from My orders.</p><button onClick={() => void pay(placed)} className="action mt-3 w-full justify-center"><CreditCard size={15} /> Pay {formatInr(placed.total)} now</button></div>}<div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2">{payState === "paid" ? <button onClick={() => void downloadReceiptFor(placed.id, placed.token).catch((e: Error) => toast.error(e.message))} className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-white"><Download size={15} /> Download receipt</button> : <Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link>}<a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
     <form key={customer?.id ?? "guest"} onSubmit={submit} className="px-5 py-7 sm:px-8">
-      {customer ? <div className="mb-5 flex items-center gap-3 rounded-2xl bg-mint/70 p-4 text-xs font-bold text-[#2f7a4a]"><Check size={16} /> Signed in as {customer.email}. This order will appear in My orders.</div> : <button type="button" onClick={() => setAccountOpen(true)} className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-krust/40 bg-white p-4 text-left text-xs font-bold text-ink transition hover:border-krust"><span>Sign in with Google to save this order to your account <span className="block font-medium text-cocoa">Or simply continue as a guest below.</span></span><ArrowRight size={16} className="shrink-0 text-krust" /></button>}
+      {!customer && needsSignIn ? null : customer ? <div className="mb-5 flex items-center gap-3 rounded-2xl bg-mint/70 p-4 text-xs font-bold text-[#2f7a4a]"><Check size={16} /> Signed in as {customer.email}. This order will appear in My orders.</div> : <button type="button" onClick={() => setAccountOpen(true)} className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-krust/40 bg-white p-4 text-left text-xs font-bold text-ink transition hover:border-krust"><span>Sign in with Google to save this order to your account <span className="block font-medium text-cocoa">Or simply continue as a guest below.</span></span><ArrowRight size={16} className="shrink-0 text-krust" /></button>}
       <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex justify-between gap-3 text-xs"><span className="text-cocoa">{line.quantity} × {product.name} <span className="opacity-60">({variant.name})</span></span><span className="font-semibold">{formatInr(variant.price * line.quantity)}</span></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
+      {!customer && needsSignIn ? <div className="mt-8 rounded-3xl border-2 border-krust bg-white p-6 text-center sm:p-8">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-blush text-krust"><UserRound size={24} /></span>
+        <h3 className="mt-4 text-2xl">Sign in to place your order</h3>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-cocoa">Sign in with Google in one tap. Your basket stays as it is, and you can track this order and download its receipt any time.</p>
+        <div className="mt-6"><GoogleButton clientId={settings.googleClientId} /></div>
+        <p className="mt-4 text-[11px] text-cocoa">We only use your name and email for your orders.</p>
+      </div> : <>
       <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} defaultValue={lastDetails?.name ?? customer?.name} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required defaultValue={lastDetails?.phone} /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" defaultValue={lastDetails?.whatsapp} /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" defaultValue={customer?.email} readOnly={!!customer} /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" defaultValue={lastDetails?.address} /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required defaultValue={lastDetails?.pincode} /></div>
       <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
       <SectionTitle number="03" title="Payment" /><div className={`grid gap-3 ${methods.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{methods.map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
@@ -578,6 +605,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
       <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(236,36,39,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>{payment === "RAZORPAY" ? "Pay" : "Place order"} · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
       {subtotal < settings.minimumOrder && <p className="mt-3 text-center text-xs font-semibold text-krust">Minimum order for delivery is {formatInr(settings.minimumOrder)}.</p>}
       <p className="mt-3 text-center text-[10px] leading-4 text-cocoa">By placing this order, you agree to the delivery and cancellation policy. We never store card details.{payment === "RAZORPAY" && " Payments are processed securely by Razorpay."}</p>
+      </>}
     </form>}
   </aside></div>;
 }

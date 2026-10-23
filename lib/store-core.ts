@@ -16,10 +16,10 @@ export type AuditEntry = { id: string; at: string; actor: string; actorRole?: Ad
 /** DEV_ADMIN: head of the site, full access. SUPER_ADMIN: business owner view. SALES_ADMIN: orders and payments only. */
 export type AdminRole = "DEV_ADMIN" | "SUPER_ADMIN" | "SALES_ADMIN";
 export const ROLE_LABELS: Record<AdminRole, string> = { DEV_ADMIN: "Dev admin", SUPER_ADMIN: "Super admin", SALES_ADMIN: "Sales admin" };
-export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History";
+export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "Hampers" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History";
 export const ROLE_TABS: Record<AdminRole, AdminTab[]> = {
-  DEV_ADMIN: ["Overview", "Orders", "Recycle bin", "Products", "Categories", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
-  SUPER_ADMIN: ["Overview", "Orders", "GST", "Customers & payments", "Settings", "History"],
+  DEV_ADMIN: ["Overview", "Orders", "Recycle bin", "Products", "Categories", "Hampers", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
+  SUPER_ADMIN: ["Overview", "Orders", "Hampers", "GST", "Customers & payments", "Settings", "History"],
   SALES_ADMIN: ["Orders", "Customers & payments"],
 };
 export type AdminUser = { id: string; name: string; username: string; role: AdminRole; active: boolean; createdAt?: string };
@@ -38,12 +38,17 @@ export type Story = {
   eyebrow: string; titleStart: string; titleAccent: string; titleEnd: string; paragraphs: string;
   imageUrl: string; statValue: string; statLabel: string; team: TeamMember[];
 };
+/** A festive gift hamper: sold as one basket item at a fixed price. */
+export type Hamper = { id: string; name: string; description: string; imageUrl: string; price: number; gstRate: number; contents: string[]; badge?: string; active: boolean };
+/** Festive mode: the hamper popup and the fireworks. */
+export type Festive = { enabled: boolean; fireworks: boolean; title: string; subtitle: string; popupDelaySeconds: number; repeatMinutes: number };
 export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRates: number[]; gstin: string; fssai: string; legalName: string; placeOfSupply: string; googleClientId: string };
 
 /** Catalogue and site content: everything a storefront visitor may read. */
 export type PublicConfig = {
   products: Product[]; categories: StoreCategory[]; slides: CarouselSlide[]; testimonials: Testimonial[]; faqs: Faq[];
   settings: StoreSettings; socialLinks: SocialLinks; branding: Branding; story: Story;
+  hampers: Hamper[]; festive: Festive;
   /** Computed on each request from server secrets; never stored. */
   payments?: { razorpay: boolean };
 };
@@ -74,6 +79,9 @@ export type AdminAction =
   | { type: "social.update"; links: SocialLinks }
   | { type: "branding.update"; patch: Partial<Branding> }
   | { type: "story.update"; story: Story }
+  | { type: "hamper.save"; hamper: Hamper }
+  | { type: "hamper.delete"; id: string }
+  | { type: "festive.update"; festive: Festive }
   | { type: "slide.save"; slide: CarouselSlide }
   | { type: "slide.delete"; id: string }
   | { type: "slide.move"; id: string; direction: -1 | 1 }
@@ -113,6 +121,15 @@ export function seedConfig(): PublicConfig {
       imageUrl: "/brand/krust-hero.png", statValue: "16+", statLabel: "Years at the bench",
       team: [{ id: "founder", name: "Karenbir Singh Suri", role: "Founder & Master Chef", photoUrl: "" }],
     },
+    hampers: [
+      { id: "diwali-classic", name: "Festive Classic Hamper", description: "A warm little celebration box for family and friends.", imageUrl: "/brand/krust-hero.png", price: 999, gstRate: 5, badge: "Bestseller", active: true,
+        contents: ["Lemon Tea Cake (200g)", "Anzac Cookies (200g)", "Madras Butter Biscuits (250g)", "Brownies (2 pcs)", "Festive gift box with greeting card"] },
+      { id: "diwali-grand", name: "Grand Diwali Hamper", description: "Our most generous box, made for gifting to clients and big families.", imageUrl: "/brand/krust-hero.png", price: 1999, gstRate: 5, badge: "Premium", active: true,
+        contents: ["Mix Berry Tea Cake (200g)", "Vanilla Tea Cake (200g)", "Peanut Butter Cookies (200g)", "Baklava Cookies (200g)", "Biscoff Brownie (2 pcs)", "Hyderabad Osmania Biscuits (250g)", "Premium wooden gift box"] },
+      { id: "diwali-mini", name: "Sweet Little Hamper", description: "A small, thoughtful treat that fits every budget.", imageUrl: "/brand/krust-hero.png", price: 599, gstRate: 5, active: true,
+        contents: ["Vanilla Tea Cake (200g)", "Walnut Brownies (200g)", "Golden Krust Cakes (4 pcs)", "Festive gift pouch"] },
+    ],
+    festive: { enabled: true, fireworks: true, title: "Happy Diwali", subtitle: "Light up the festival with our handcrafted gift hampers", popupDelaySeconds: 4, repeatMinutes: 10 },
     settings: { minimumOrder: 750, deliveryFee: 0, gstRates: [0, 5, 18], gstin: "", fssai: "", legalName: "Krust Artisan Bakes", placeOfSupply: "Tamil Nadu (33)", googleClientId: "" },
     socialLinks: { instagram: "https://instagram.com/", facebook: "https://facebook.com/", twitter: "https://x.com/", whatsapp: "https://wa.me/919840477330" },
     branding: {
@@ -128,3 +145,19 @@ export function seedConfig(): PublicConfig {
 }
 
 export const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || crypto.randomUUID();
+
+export const HAMPER_CATEGORY = "Hampers";
+export const HAMPER_VARIANT = "hamper";
+export const hamperProductId = (hamperId: string) => `hamper-${hamperId}`;
+
+/** Every sellable item: products plus active hampers shaped as products, so cart, checkout and pricing treat them alike. */
+export function sellableCatalog(config: Pick<PublicConfig, "products" | "hampers">): Product[] {
+  return [
+    ...config.products,
+    ...(config.hampers ?? []).filter((h) => h.active).map((h): Product => ({
+      id: hamperProductId(h.id), name: h.name, description: h.description, category: HAMPER_CATEGORY, eggless: false, hsn: "1905",
+      gstRate: h.gstRate, accent: "#f6c9c9", crop: "50% 50%", imageUrl: h.imageUrl, active: true, featured: false,
+      variants: [{ id: HAMPER_VARIANT, name: "Gift hamper", price: h.price }],
+    })),
+  ];
+}

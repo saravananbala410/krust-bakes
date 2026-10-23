@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
-  ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, slug,
+  HAMPER_CATEGORY, ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, sellableCatalog, slug,
   type AdminAction, type AdminData, type Customer, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
 } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
@@ -61,7 +61,7 @@ export async function getConfig(): Promise<PublicConfig> {
   const newFaq4 = seed.faqs.find((f) => f.id === "f-4");
   if (faq4 && newFaq4) Object.assign(faq4, { question: newFaq4.question, answer: newFaq4.answer });
   // Merge so fields added in later releases get their defaults.
-  return { ...seed, ...stored, payments: paymentsFlag(), settings: { ...seed.settings, ...stored.settings }, branding: { ...seed.branding, ...stored.branding }, socialLinks: { ...seed.socialLinks, ...stored.socialLinks }, story: { ...seed.story, ...stored.story } };
+  return { ...seed, ...stored, payments: paymentsFlag(), settings: { ...seed.settings, ...stored.settings }, branding: { ...seed.branding, ...stored.branding }, socialLinks: { ...seed.socialLinks, ...stored.socialLinks }, story: { ...seed.story, ...stored.story }, festive: { ...seed.festive, ...stored.festive } };
 }
 
 async function saveConfig({ payments: _computed, ...config }: PublicConfig) {
@@ -209,14 +209,18 @@ export async function placeOrder(input: PlaceOrderInput, customer?: Customer | n
   const parsed = placeOrderSchema.safeParse(input);
   if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid order");
   const data = parsed.data;
-  if (data.paymentMethod === "RAZORPAY" && !razorpayKeys()) throw new HttpError(503, "Online payment is not available right now. Please choose pay on delivery.");
   const config = await getConfig();
+  // When Google login is set up, every order must come from a signed-in customer.
+  if (config.settings.googleClientId && !customer) throw new HttpError(401, "Please sign in with Google to place your order");
+  if (data.paymentMethod === "RAZORPAY" && !razorpayKeys()) throw new HttpError(503, "Online payment is not available right now. Please choose pay on delivery.");
   const activeCategories = new Set(config.categories.filter((c) => c.active).map((c) => c.name));
   // Price from the server catalogue, never from the client.
+  const catalog = sellableCatalog(config);
   const lines = data.lines.map((line) => {
-    const product = config.products.find((p) => p.id === line.productId);
+    const product = catalog.find((p) => p.id === line.productId);
     const variant = product?.variants.find((v) => v.id === line.variantId);
-    if (!product || !variant || product.active === false || !activeCategories.has(product.category)) throw new HttpError(409, "An item in your basket is no longer available. Please refresh and try again.");
+    const listed = product && (product.category === HAMPER_CATEGORY ? config.festive.enabled : activeCategories.has(product.category));
+    if (!product || !variant || product.active === false || !listed) throw new HttpError(409, "An item in your basket is no longer available. Please refresh and try again.");
     return { productId: product.id, productName: product.name, variantName: variant.name, hsn: product.hsn, quantity: line.quantity, unitPrice: variant.price, gstRate: product.gstRate };
   });
   const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
@@ -246,7 +250,7 @@ export async function getOrderForInvoice(request: Request, id: string, token: st
 // ---------- assets (uploaded images) ----------
 
 export async function saveAsset(admin: AdminRecord, mime: string, base64: string) {
-  if (admin.role !== "DEV_ADMIN") throw new HttpError(403, "Only the dev admin can upload images");
+  if (admin.role !== "DEV_ADMIN" && admin.role !== "SUPER_ADMIN") throw new HttpError(403, "Your role cannot upload images");
   if (!/^image\/(png|jpe?g|webp|gif)$/.test(mime)) throw new HttpError(415, "Only image uploads are allowed");
   if (base64.length > 2_000_000) throw new HttpError(413, "Image is too large. Please use one under 1.5 MB.");
   await ready();
@@ -284,7 +288,7 @@ function upsert<T extends { id: string }>(list: T[], item: T) {
 function permittedRoles(action: AdminAction): AdminRole[] {
   switch (action.type) {
     case "order.update": case "admin.changeOwnPassword": case "admin.updateOwnProfile": return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
-    case "order.recycle": case "settings.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
+    case "order.recycle": case "settings.update": case "hamper.save": case "hamper.delete": case "festive.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
     default: return ["DEV_ADMIN"];
   }
 }
@@ -445,8 +449,8 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
       if (p.deliveryFee !== undefined) settings.deliveryFee = Math.max(0, Number(p.deliveryFee) || 0);
       if (p.gstRates !== undefined) {
         const rates = [...new Set(p.gstRates.map(Number).filter((r) => Number.isFinite(r) && r >= 0 && r <= 40))].sort((a, b) => a - b);
-        const inUse = [...new Set(config.products.map((x) => x.gstRate))].filter((r) => !rates.includes(r));
-        if (inUse.length) throw new HttpError(409, `GST ${inUse.join("%, ")}% is still used by products. Change those products first.`);
+        const inUse = [...new Set([...config.products, ...config.hampers].map((x) => x.gstRate))].filter((r) => !rates.includes(r));
+        if (inUse.length) throw new HttpError(409, `GST ${inUse.join("%, ")}% is still used by products or hampers. Change those first.`);
         settings.gstRates = rates;
       }
       if (p.gstin !== undefined) { const v = text(p.gstin, 15).toUpperCase(); if (v && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v)) throw new HttpError(400, "GSTIN format looks wrong (15 characters, e.g. 33ABCDE1234F1Z5)"); settings.gstin = v; }
@@ -475,6 +479,41 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
       const team = (s.team ?? []).slice(0, 12).map((m) => ({ id: text(m.id, 80) || crypto.randomUUID(), name: text(m.name, 80), role: text(m.role, 80), photoUrl: text(m.photoUrl, 300) })).filter((m) => m.name);
       next = { ...config, story: { eyebrow: text(s.eyebrow, 80), titleStart: text(s.titleStart, 120), titleAccent: text(s.titleAccent, 40), titleEnd: text(s.titleEnd, 120), paragraphs: text(s.paragraphs, 3000), imageUrl: text(s.imageUrl, 300) || "/brand/krust-hero.png", statValue: text(s.statValue, 12), statLabel: text(s.statLabel, 40), team } };
       entry = ["Our story updated", "Story section", `${team.length} team member(s)`];
+      break;
+    }
+    case "hamper.save": {
+      const h = action.hamper;
+      const price = Math.round(Number(h.price) * 100) / 100;
+      const hamper = {
+        id: text(h.id, 80) || `${slug(text(h.name, 60))}-${Date.now().toString(36)}`,
+        name: text(h.name, 100), description: text(h.description, 400), imageUrl: text(h.imageUrl, 300) || "/brand/krust-hero.png",
+        price, gstRate: Number(h.gstRate), badge: text(h.badge, 30) || undefined, active: h.active !== false,
+        contents: (h.contents ?? []).map((c) => text(c, 120)).filter(Boolean).slice(0, 30),
+      };
+      if (!hamper.name) throw new HttpError(400, "Hamper name is required");
+      if (!Number.isFinite(price) || price <= 0) throw new HttpError(400, "Enter a hamper price above zero");
+      if (!config.settings.gstRates.includes(hamper.gstRate)) throw new HttpError(400, "Choose a configured GST rate");
+      if (!hamper.contents.length) throw new HttpError(400, "List at least one item inside the hamper");
+      const existed = config.hampers.some((x) => x.id === hamper.id);
+      next = { ...config, hampers: upsert(config.hampers, hamper) };
+      entry = [existed ? "Hamper updated" : "Hamper created", hamper.name, `₹${hamper.price} · ${hamper.contents.length} items · ${hamper.active ? "Live" : "Hidden"}`];
+      break;
+    }
+    case "hamper.delete": {
+      const h = config.hampers.find((x) => x.id === action.id);
+      next = { ...config, hampers: config.hampers.filter((x) => x.id !== action.id) };
+      entry = ["Hamper deleted", h?.name ?? action.id, "Removed"];
+      break;
+    }
+    case "festive.update": {
+      const f = action.festive;
+      const festive = {
+        enabled: !!f.enabled, fireworks: !!f.fireworks, title: text(f.title, 60) || "Happy Diwali", subtitle: text(f.subtitle, 160),
+        popupDelaySeconds: Math.min(60, Math.max(0, Math.round(Number(f.popupDelaySeconds) || 0))),
+        repeatMinutes: Math.min(1440, Math.max(1, Math.round(Number(f.repeatMinutes) || 10))),
+      };
+      next = { ...config, festive };
+      entry = ["Festive settings updated", "Hampers & fireworks", `Popup ${festive.enabled ? "on" : "off"} · Fireworks ${festive.fireworks ? "on" : "off"}`];
       break;
     }
     case "branding.update": {

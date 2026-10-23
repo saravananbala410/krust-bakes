@@ -339,6 +339,7 @@ function Footer() {
       </div>
       <div className="mx-auto mt-12 flex max-w-[1440px] flex-col gap-2 border-t border-krust/20 pt-5 text-[11px] font-semibold text-cocoa sm:flex-row sm:justify-between">
         <p>© {new Date().getFullYear()} {branding.storeName}. Made fresh in Chennai.</p>
+        <nav className="flex flex-wrap gap-x-4 gap-y-1">{[["/terms", "Terms"], ["/privacy", "Privacy"], ["/refund-policy", "Refunds & cancellation"], ["/shipping-policy", "Shipping & delivery"], ["/contact", "Contact"]].map(([h, l]) => <Link key={h} href={h} className="hover:text-krust">{l}</Link>)}</nav>
         <p>Prices include GST{settings.gstin && ` · GSTIN ${settings.gstin}`}{settings.fssai && ` · FSSAI ${settings.fssai}`}</p>
       </div>
     </footer>
@@ -415,7 +416,7 @@ function Hero() {
           <p className="mt-6 max-w-xl text-lg leading-8 text-cocoa">{branding.heroCopy}</p>
           <div className="mt-9 flex flex-wrap gap-3">
             <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_rgba(236,36,39,.3)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
-            <a href="/our-story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</a>
+            <Link href="/our-story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</Link>
           </div>
           <div className="mt-10 flex flex-wrap gap-2">{["No MSG", "No bromides", "Eggless options", "No artificial colours"].map((t) => <span key={t} className="badge border border-krust/20 bg-white text-krust"><Check size={12} /> {t}</span>)}</div>
         </div>

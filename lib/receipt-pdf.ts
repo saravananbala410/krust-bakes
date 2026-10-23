@@ -30,7 +30,19 @@ async function imageData(url: string) {
     const img = new Image();
     img.src = dataUrl;
     await img.decode();
-    return { dataUrl, ratio: img.naturalWidth / img.naturalHeight };
+    // PDF viewers draw a PNG's transparency mask without smoothing, which makes
+    // logo edges look jagged. Flatten onto white at 3x with high-quality scaling.
+    const scale = Math.min(3, 1800 / img.naturalWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { dataUrl: canvas.toDataURL("image/jpeg", 0.92), ratio: img.naturalWidth / img.naturalHeight };
   } catch {
     return null;
   }
@@ -55,7 +67,7 @@ export async function downloadReceiptPdf({ order, settings, branding }: InvoiceD
   doc.rect(0, 0, W, 4, "F");
   let y = 16;
   const logo = await imageData(branding.wordmarkUrl);
-  if (logo) doc.addImage(logo.dataUrl, "PNG", M, y - 6, 48, 48 / logo.ratio);
+  if (logo) doc.addImage(logo.dataUrl, "JPEG", M, y - 6, 48, 48 / logo.ratio);
   else text(branding.storeName, M, y, { size: 16, bold: true, color: RED });
   const addressLines = doc.splitTextToSize(branding.address, 80) as string[];
   let ly = y + (logo ? 48 / logo.ratio : 4);

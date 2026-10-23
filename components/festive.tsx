@@ -226,8 +226,11 @@ export function DiwaliGarland() {
       {Array.from({ length: bulbs }, (_, i) => {
         const t = (i + 0.5) / bulbs;
         const swag = (t * 5) % 1; // position inside one of five swags
-        const top = 2 + Math.sin(swag * Math.PI) * 26;
-        return <span key={i} className={`bulb absolute h-2.5 w-2.5 rounded-full ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${t * 100}%`, top: `${top}px`, color: BULB_COLORS[i % BULB_COLORS.length], background: BULB_COLORS[i % BULB_COLORS.length], animationDelay: `${(i * 137) % 1600}ms` }} />;
+        // Rounded so server and browser write identical style strings (avoids hydration warnings).
+        const top = Math.round((2 + Math.sin(swag * Math.PI) * 26) * 10) / 10;
+        const left = Math.round(t * 10000) / 100;
+        const color = BULB_COLORS[i % BULB_COLORS.length];
+        return <span key={i} suppressHydrationWarning className={`bulb absolute h-2.5 w-2.5 rounded-full ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${left}%`, top: `${top}px`, color, backgroundColor: color, animationDelay: `${(i * 137) % 1600}ms` }} />;
       })}
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 sm:px-16">
         {[0, 1, 2, 3, 4].map((i) => <span key={i} className={i % 2 ? "max-sm:hidden" : ""}><Diya size={34} delay={i * 220} /></span>)}

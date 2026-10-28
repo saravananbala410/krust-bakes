@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/app-store";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
-import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRole, type AdminTab, type AdminUser, type AuditEntry, type CarouselSlide, type Faq, type Festive, type Hamper, type StoreOrder, type TeamMember, type Testimonial } from "@/lib/store-core";
+import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRole, type AdminTab, type AdminUser, type AuditEntry, galleryOf, MAX_PHOTOS, type CarouselSlide, type Faq, type Festive, type Hamper, type StoreOrder, type TeamMember, type Testimonial } from "@/lib/store-core";
 import type { Product, Variant } from "@/lib/types";
 import { downloadXlsx } from "@/lib/xlsx";
 import { socialIcons, socialLabels } from "./social-icons";
@@ -208,7 +208,7 @@ type Analytics = {
   days: Array<{ day: string; visitors: number; pageViews: number; orders: number; revenue: number }>;
   pages: Array<{ path: string; views: number; visitors: number }>;
 };
-const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story" };
+const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story", "/orders": "Your orders", "/product": "Product pages" };
 
 function Visitors() {
   const [data, setData] = useState<Analytics | null>(null);
@@ -228,11 +228,11 @@ function Visitors() {
   const dayLabel = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   const notOrdered = Math.max(0, data.last30.visitors - data.last30.customers);
   return <div className="space-y-6">
-    <Header title="Visitors" copy="How many people opened the website and how many of them ordered. Counted anonymously; bots and search engines are left out. Updates every minute." action={<button onClick={() => downloadXlsx("krust-visitors", { "Daily visitors": data.days.map((d) => ({ Date: d.day, Visitors: d.visitors, "Page views": d.pageViews, Orders: d.orders, Revenue: d.revenue })), Pages: data.pages.map((p) => ({ Page: PAGE_NAMES[p.path] ?? p.path, Visitors: p.visitors, Views: p.views })) })} className="action secondary"><Download size={14} /> Export XL</button>} />
+    <Header title="Visitors" copy="Each person counts once per day, however many times they visit or refresh. Signed-in customers count by their email (a different email is a different person); others by their device. Bots are left out. Updates every minute." action={<button onClick={() => downloadXlsx("krust-visitors", { "Daily visitors": data.days.map((d) => ({ Date: d.day, Visitors: d.visitors, "Page views": d.pageViews, Orders: d.orders, Revenue: d.revenue })), Pages: data.pages.map((p) => ({ Page: PAGE_NAMES[p.path] ?? p.path, Visitors: p.visitors, Views: p.views })) })} className="action secondary"><Download size={14} /> Export XL</button>} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Visitors today" value={String(data.today.visitors)} icon={Eye} tint="bg-lilac" />
       <Metric label="Orders today" value={String(data.today.orders)} icon={ShoppingBag} tint="bg-mint" />
-      <Metric label="Visitors · 30 days" value={String(data.last30.visitors)} icon={Users} tint="bg-blush" />
+      <Metric label="Visits · 30 days" value={String(data.last30.visitors)} icon={Users} tint="bg-blush" />
       <Metric label="Orders · 30 days" value={String(data.last30.orders)} icon={Receipt} tint="bg-peach" />
     </div>
     <Panel title="Visited vs ordered · last 30 days">
@@ -369,7 +369,7 @@ function ProductEditor({ product, onClose }: { product: Product; onClose: () => 
   const setVariant = (i: number, patch: Partial<Variant>) => set("variants", draft.variants.map((v, j) => (j === i ? { ...v, ...patch } : v)));
   const save = async (e: FormEvent) => { e.preventDefault(); setSaving(true); const ok = await run({ type: "product.save", product: draft }, `${draft.name} saved`); setSaving(false); if (ok) onClose(); };
   return <Drawer title={product.id ? "Edit product" : "Add product"} onClose={onClose}><form onSubmit={save} className="space-y-4">
-    <ImageField label="Product photo" value={draft.imageUrl ?? ""} onChange={(v) => set("imageUrl", v)} />
+    <GalleryField label="Product photos" photos={galleryOf(draft)} onChange={(images) => setDraft((d) => ({ ...d, images, imageUrl: images[0] ?? "" }))} />
     <Field label="Product name" value={draft.name} onChange={(e) => set("name", e.target.value)} required />
     <label className="block"><span className="label">Description</span><textarea value={draft.description} onChange={(e) => set("description", e.target.value)} rows={2} className="input" /></label>
     <div className="grid grid-cols-2 gap-3">
@@ -582,7 +582,7 @@ function HamperEditor({ hamper, onClose }: { hamper: Hamper; onClose: () => void
   const addProduct = () => { const p = products.find((x) => x.id === pick); if (!p) return; const line = `${p.name} (${p.variants[0]?.name ?? ""})`; setContents((c) => (c.trim() ? `${c.trim()}\n${line}` : line)); setPick(""); };
   const save = async (e: FormEvent) => { e.preventDefault(); const ok = await run({ type: "hamper.save", hamper: { ...d, contents: contents.split("\n").map((x) => x.trim()).filter(Boolean) } }, `${d.name || "Hamper"} saved`); if (ok) onClose(); };
   return <Drawer title={hamper.id ? "Edit hamper" : "Add hamper"} onClose={onClose}><form onSubmit={save} className="space-y-4">
-    <ImageField label="Hamper photo" value={d.imageUrl} onChange={(v) => setD({ ...d, imageUrl: v })} />
+    <GalleryField label="Hamper photos (they slide like a carousel)" photos={galleryOf(d)} onChange={(images) => setD({ ...d, images, imageUrl: images[0] ?? "" })} />
     <Field label="Hamper name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Grand Diwali Hamper" required />
     <label className="block"><span className="label">Short description</span><textarea value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} rows={2} className="input" /></label>
     <div className="grid grid-cols-2 gap-3"><Field label="Price incl. GST (₹)" type="number" min={1} step="0.01" value={d.price || ""} onChange={(e) => setD({ ...d, price: Number(e.target.value) })} required /><label><span className="label">GST rate</span><select value={d.gstRate} onChange={(e) => setD({ ...d, gstRate: Number(e.target.value) })} className="input">{settings.gstRates.map((r) => <option key={r} value={r}>{r}%</option>)}</select></label><Field label="Badge (optional)" value={d.badge ?? ""} onChange={(e) => setD({ ...d, badge: e.target.value })} placeholder="Bestseller" /></div>
@@ -672,6 +672,39 @@ function History() {
 }
 
 // ---------- primitives ----------
+
+/** Several photos: upload many at once, pick the main one, reorder, remove. The first photo is the main one. */
+function GalleryField({ label, photos, onChange }: { label: string; photos: string[]; onChange: (v: string[]) => void }) {
+  const upload = useAppStore((s) => s.upload);
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState("");
+  const add = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    const next = [...photos];
+    for (const file of [...files].slice(0, MAX_PHOTOS - photos.length)) { const u = await upload(file); if (u) next.push(u); }
+    setBusy(false);
+    onChange(next);
+    if (next.length > photos.length) toast.success(`${next.length - photos.length} photo(s) added`);
+  };
+  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= photos.length) return; const next = [...photos]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+  const full = photos.length >= MAX_PHOTOS;
+  return <div><span className="label">{label} · {photos.length}/{MAX_PHOTOS}</span>
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{photos.map((p, i) => <div key={p + i} className={`relative overflow-hidden rounded-xl border-2 bg-cream ${i === 0 ? "border-krust" : "border-petal"}`}>
+      <img src={p} alt="" className="aspect-square w-full object-cover" />
+      {i === 0 && <span className="badge absolute left-1 top-1 bg-krust !px-2 !text-[8px] text-white">Main</span>}
+      <div className="absolute inset-x-0 bottom-0 flex justify-between bg-ink/60 p-1">
+        <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move left" className="grid h-6 w-6 place-items-center rounded text-white disabled:opacity-30"><ArrowLeft size={12} /></button>
+        {i > 0 && <button type="button" onClick={() => onChange([p, ...photos.filter((_, j) => j !== i)])} className="rounded px-1 text-[9px] font-bold text-white">Make main</button>}
+        <button type="button" onClick={() => onChange(photos.filter((_, j) => j !== i))} aria-label="Remove photo" className="grid h-6 w-6 place-items-center rounded text-white"><X size={12} /></button>
+      </div>
+    </div>)}
+      {!full && <label className={`grid aspect-square cursor-pointer place-items-center rounded-xl border-2 border-dashed border-krust/50 text-center text-[10px] font-bold text-krust hover:bg-blush ${busy ? "opacity-60" : ""}`}><span><Upload size={18} className="mx-auto mb-1" />{busy ? "Uploading…" : "Add photos"}</span><input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={busy} onChange={(e) => { void add(e.target.files); e.target.value = ""; }} /></label>}
+    </div>
+    {!full && <div className="mt-2 flex gap-2"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="…or paste a photo URL" className="input !h-9 text-xs" /><button type="button" disabled={!url.trim()} onClick={() => { onChange([...photos, url.trim()]); setUrl(""); }} className="action secondary !h-9 shrink-0 disabled:opacity-40"><Plus size={13} /> Add</button></div>}
+    <p className="mt-1 text-[11px] text-cocoa">The first photo is shown on the menu card. Customers see all photos on the product page.</p>
+  </div>;
+}
 
 function ImageField({ label, value, onChange, contain = false }: { label: string; value: string; onChange: (v: string) => void; contain?: boolean }) {
   const upload = useAppStore((s) => s.upload);

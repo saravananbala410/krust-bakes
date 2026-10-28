@@ -8,6 +8,7 @@ import { useCustomerStore } from "@/lib/customer-store";
 import { formatInr } from "@/lib/gst";
 import { payOnline } from "@/lib/razorpay-client";
 import { downloadReceiptFor } from "@/lib/receipt-pdf";
+import { useBackClose } from "@/lib/use-back-close";
 import type { CustomerOrder } from "@/lib/store-core";
 
 type GoogleId = {
@@ -66,7 +67,8 @@ function OrderCard({ order, online = false }: { order: CustomerOrder; online?: b
   const [paying, setPaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const download = async () => { setSaving(true); try { await downloadReceiptFor(order.id, order.token); } catch (e) { toast.error((e as Error).message); } setSaving(false); };
-  const canPay = online && !paid && !cancelled && order.paymentMethod === "RAZORPAY";
+  // Any unpaid order can be paid online, including ones placed as pay on delivery.
+  const canPay = online && !paid && !cancelled;
   const pay = async () => {
     setPaying(true);
     const result = await payOnline(order.id, order.token);
@@ -91,7 +93,7 @@ function OrderCard({ order, online = false }: { order: CustomerOrder; online?: b
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {paid ? <><button onClick={() => void download()} disabled={saving} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-krust px-4 text-xs font-extrabold text-white hover:bg-krust-deep disabled:opacity-60"><Download size={13} /> {saving ? "Preparing…" : "Download receipt"}</button><Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> View</Link></>
           : <Link href={`/invoice/${order.id}?t=${order.token}`} className="inline-flex items-center gap-1.5 text-xs font-extrabold text-krust hover:underline"><FileText size={13} /> GST invoice</Link>}
-        {canPay && <button onClick={() => void pay()} disabled={paying} className="inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-krust px-4 text-xs font-extrabold text-krust hover:bg-blush disabled:opacity-60"><CreditCard size={13} /> {paying ? "Opening…" : `Pay ${formatInr(order.total)} now`}</button>}
+        {canPay && <button onClick={() => void pay()} disabled={paying} className="inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-krust px-4 text-xs font-extrabold text-krust hover:bg-blush disabled:opacity-60"><CreditCard size={13} /> {paying ? "Opening…" : order.paymentMethod === "PAY_ON_DELIVERY" ? `Pay ${formatInr(order.total)} online instead` : `Pay ${formatInr(order.total)} now`}</button>}
         {paid && order.paidAt && <span className="text-[11px] font-semibold text-[#2f7a4a]">Paid {new Date(order.paidAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>}
       </div>
     </article>
@@ -116,32 +118,39 @@ function TrackOrder() {
   </div>;
 }
 
-/** Slide-over for customer sign-in, order history and guest tracking. */
+/** Sign-in, order history and guest tracking; used on the Your orders page and in the slide-over. */
+export function AccountContent({ clientId, online = false, onNavigate }: { clientId: string; online?: boolean; onNavigate?: () => void }) {
+  const { customer, orders, signOut, loaded } = useCustomerStore();
+  if (!loaded) return <div className="grid min-h-48 place-items-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-petal border-t-krust" /></div>;
+  return customer ? <>
+    <div className="flex items-center gap-4 rounded-3xl border-2 border-krust bg-white p-5">
+      {customer.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full border-2 border-krust object-cover" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-krust text-white"><UserRound size={22} /></span>}
+      <div className="min-w-0 flex-1"><p className="truncate text-lg font-extrabold">{customer.name}</p><p className="truncate text-xs font-semibold text-cocoa">{customer.email}</p></div>
+      <button onClick={() => void signOut().then(() => toast.success("Signed out"))} className="flex items-center gap-1.5 rounded-full border border-petal px-3 py-2 text-[11px] font-extrabold text-krust hover:border-krust"><LogOut size={13} /> Sign out</button>
+    </div>
+    {orders.length > 0 && <p className="mt-6 text-xs font-bold uppercase tracking-[.16em] text-cocoa">{orders.length} order{orders.length === 1 ? "" : "s"}</p>}
+    <div className="mt-3 space-y-3">{orders.map((o) => <OrderCard key={o.id} order={o} online={online} />)}</div>
+    {!orders.length && <div className="mt-6 rounded-3xl border-2 border-dashed border-petal bg-white p-10 text-center"><ShoppingBag className="mx-auto text-krust" /><p className="mt-3 font-display text-xl">No orders yet</p><p className="mt-1 text-xs text-cocoa">Your orders will appear here with live status and GST invoices.</p><Link href="/shop" onClick={onNavigate} className="action mt-5">Start shopping <ArrowRight size={14} /></Link></div>}
+  </> : <>
+    <div className="rounded-3xl border-2 border-krust bg-white p-6 text-center sm:p-8">
+      <p className="font-display text-2xl">Welcome to Krust</p>
+      <p className="mx-auto mt-2 max-w-xs text-sm font-medium text-cocoa">Sign in to see all your orders, follow their status live and download GST invoices any time.</p>
+      <ul className="mx-auto mt-5 max-w-xs space-y-2 text-left text-xs font-bold">{["Order history in one place", "Live order status", "Pay online and download receipts"].map((t) => <li key={t} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-krust text-white"><Check size={11} /></span>{t}</li>)}</ul>
+      <div className="mt-6">{clientId ? <GoogleButton clientId={clientId} /> : <p className="rounded-xl bg-cream p-3 text-xs font-bold text-cocoa">Google sign-in is coming soon.</p>}</div>
+      <p className="mt-4 text-[10px] font-medium text-cocoa">We only use your name and email for your orders.</p>
+    </div>
+    <div className="mt-8"><p className="eyebrow">Ordered as a guest?</p><h3 className="mt-2 text-xl">Track your order</h3><p className="mb-4 mt-1 text-xs text-cocoa">Enter the order ID from your confirmation and the phone number you used.</p><TrackOrder /></div>
+  </>;
+}
+
+/** Slide-over version of the account, opened from checkout. The Back button closes it. */
 export function AccountSheet({ clientId, online = false }: { clientId: string; online?: boolean }) {
-  const { customer, orders, setAccountOpen, signOut } = useCustomerStore();
+  const { customer, setAccountOpen } = useCustomerStore();
   const close = () => setAccountOpen(false);
   useEffect(() => { const esc = (e: KeyboardEvent) => e.key === "Escape" && setAccountOpen(false); window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [setAccountOpen]);
+  useBackClose(true, close);
   return <div className="fixed inset-0 z-50 flex justify-end bg-ink/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Your account"><button onClick={close} className="absolute inset-0 cursor-default" aria-label="Close" /><aside className="relative h-full w-full max-w-[560px] overflow-y-auto bg-cream shadow-2xl" style={{ animation: "slide-in-right .45s cubic-bezier(.2,.8,.2,1) both" }}>
-    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Your Krust account</p><h2 className="text-3xl">{customer ? "My orders" : "Sign in"}</h2></div><button onClick={close} className="grid h-10 w-10 place-items-center rounded-full border border-petal bg-white" aria-label="Close"><X size={18} /></button></div>
-    <div className="px-5 py-7 sm:px-8">
-      {customer ? <>
-        <div className="flex items-center gap-4 rounded-3xl border-2 border-krust bg-white p-5">
-          {customer.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full border-2 border-krust object-cover" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-krust text-white"><UserRound size={22} /></span>}
-          <div className="min-w-0 flex-1"><p className="truncate text-lg font-extrabold">{customer.name}</p><p className="truncate text-xs font-semibold text-cocoa">{customer.email}</p></div>
-          <button onClick={() => void signOut().then(() => toast.success("Signed out"))} className="flex items-center gap-1.5 rounded-full border border-petal px-3 py-2 text-[11px] font-extrabold text-krust hover:border-krust"><LogOut size={13} /> Sign out</button>
-        </div>
-        <div className="mt-6 space-y-3">{orders.map((o) => <OrderCard key={o.id} order={o} online={online} />)}</div>
-        {!orders.length && <div className="mt-6 rounded-3xl border-2 border-dashed border-petal bg-white p-10 text-center"><ShoppingBag className="mx-auto text-krust" /><p className="mt-3 font-display text-xl">No orders yet</p><p className="mt-1 text-xs text-cocoa">Your orders will appear here with live status and GST invoices.</p><a href="#menu" onClick={close} className="action mt-5">Start shopping <ArrowRight size={14} /></a></div>}
-      </> : <>
-        <div className="rounded-3xl border-2 border-krust bg-white p-6 text-center sm:p-8">
-          <p className="font-display text-2xl">Welcome to Krust</p>
-          <p className="mx-auto mt-2 max-w-xs text-sm font-medium text-cocoa">Sign in to see all your orders, follow their status live and download GST invoices any time.</p>
-          <ul className="mx-auto mt-5 max-w-xs space-y-2 text-left text-xs font-bold">{["Order history in one place", "Live order status", "Faster checkout with saved details"].map((t) => <li key={t} className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-krust text-white"><Check size={11} /></span>{t}</li>)}</ul>
-          <div className="mt-6">{clientId ? <GoogleButton clientId={clientId} /> : <p className="rounded-xl bg-cream p-3 text-xs font-bold text-cocoa">Google sign-in is coming soon.</p>}</div>
-          <p className="mt-4 text-[10px] font-medium text-cocoa">We only use your name and email. You can still order as a guest.</p>
-        </div>
-        <div className="mt-8"><p className="eyebrow">Ordered as a guest?</p><h3 className="mt-2 text-xl">Track your order</h3><p className="mb-4 mt-1 text-xs text-cocoa">Enter the order ID from your confirmation and the phone number you used.</p><TrackOrder /></div>
-      </>}
-    </div>
+    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Your Krust account</p><h2 className="text-3xl">{customer ? "Your orders" : "Sign in"}</h2></div><button onClick={close} className="grid h-11 w-11 place-items-center rounded-full border-2 border-petal bg-white" aria-label="Close"><X size={20} /></button></div>
+    <div className="px-5 py-7 sm:px-8"><AccountContent clientId={clientId} online={online} onNavigate={close} /></div>
   </aside></div>;
 }

@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCartStore } from "@/lib/cart-store";
 import { formatInr } from "@/lib/gst";
-import { HAMPER_VARIANT, hamperProductId, type Festive, type Hamper } from "@/lib/store-core";
+import { galleryOf, HAMPER_VARIANT, hamperProductId, type Festive, type Hamper } from "@/lib/store-core";
+import { useBackClose } from "@/lib/use-back-close";
+import { PhotoCarousel } from "./photo-carousel";
 
 // ---------- Fireworks ----------
 
@@ -14,7 +16,7 @@ type Rocket = { x: number; y: number; vy: number; targetY: number; color: string
 const COLORS = ["#EC2427", "#FFD45C", "#FFFFFF", "#FF8A3D", "#FFB3C1", "#F5C542"];
 
 /** Full-screen canvas of bursting crackers. Each change of `burst` launches a new volley. */
-export function Fireworks({ burst, seconds = 6 }: { burst: number; seconds?: number }) {
+export function Fireworks({ burst, seconds = 2.5 }: { burst: number; seconds?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!burst) return;
@@ -33,13 +35,13 @@ export function Fireworks({ burst, seconds = 6 }: { burst: number; seconds?: num
     let frame = 0;
     const launch = () => rockets.push({ x: innerWidth * (0.12 + Math.random() * 0.76), y: innerHeight, vy: -(innerHeight / 55 + Math.random() * 4), targetY: innerHeight * (0.12 + Math.random() * 0.35), color: COLORS[Math.floor(Math.random() * COLORS.length)] });
     const explode = (r: Rocket) => {
-      const count = 70 + Math.floor(Math.random() * 40);
-      const speed = 2.5 + Math.random() * 3;
+      const count = 34 + Math.floor(Math.random() * 18);
+      const speed = 2 + Math.random() * 2;
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count;
         const v = speed * (0.55 + Math.random() * 0.6);
-        const max = 55 + Math.random() * 35;
-        particles.push({ x: r.x, y: r.y, vx: Math.cos(angle) * v, vy: Math.sin(angle) * v, life: max, max, color: Math.random() < 0.25 ? "#FFFFFF" : r.color, size: 1.6 + Math.random() * 1.6 });
+        const max = 40 + Math.random() * 25;
+        particles.push({ x: r.x, y: r.y, vx: Math.cos(angle) * v, vy: Math.sin(angle) * v, life: max, max, color: Math.random() < 0.25 ? "#FFFFFF" : r.color, size: 1.2 + Math.random() * 1.2 });
       }
     };
     const tick = (now: number) => {
@@ -47,7 +49,7 @@ export function Fireworks({ burst, seconds = 6 }: { burst: number; seconds?: num
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.fillRect(0, 0, innerWidth, innerHeight);
       ctx.globalCompositeOperation = "lighter";
-      if (now < end && now > nextLaunch) { launch(); if (Math.random() < 0.45) launch(); nextLaunch = now + 260 + Math.random() * 420; }
+      if (now < end && now > nextLaunch) { launch(); nextLaunch = now + 650 + Math.random() * 600; }
       for (let i = rockets.length - 1; i >= 0; i--) {
         const r = rockets[i];
         r.y += r.vy; r.vy *= 0.985;
@@ -57,7 +59,7 @@ export function Fireworks({ burst, seconds = 6 }: { burst: number; seconds?: num
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx; p.y += p.vy; p.vy += 0.045; p.vx *= 0.985; p.vy *= 0.985; p.life -= 1;
-        ctx.globalAlpha = Math.max(0, p.life / p.max);
+        ctx.globalAlpha = Math.max(0, p.life / p.max) * 0.85;
         ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
         if (p.life <= 0) particles.splice(i, 1);
       }
@@ -87,17 +89,17 @@ function useAddHamper(onAdded?: () => void) {
 
 function HamperCard({ hamper, onOpen }: { hamper: Hamper; onOpen: () => void }) {
   return (
-    <button onClick={onOpen} className="lift group flex h-full flex-col overflow-hidden rounded-[22px] border-2 border-[#f5c542]/60 bg-white text-left">
-      <div className="relative h-36 overflow-hidden bg-peach sm:h-44">
-        <img src={hamper.imageUrl} alt={hamper.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        {hamper.badge && <span className="badge absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="lift group flex h-full cursor-pointer flex-col overflow-hidden rounded-[22px] border-2 border-[#f5c542]/60 bg-white text-left">
+      <div className="relative h-36 sm:h-44">
+        <PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={3200} className="h-full [&>div]:h-full" rounded="rounded-none" />
+        {hamper.badge && <span className="badge pointer-events-none absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <p className="font-display text-lg leading-tight">{hamper.name}</p>
         <p className="mt-1 text-[11px] font-semibold text-cocoa">{hamper.contents.length} treats inside</p>
         <div className="mt-auto flex items-center justify-between pt-3"><span className="font-display text-xl font-extrabold text-krust">{formatInr(hamper.price)}</span><span className="text-[11px] font-extrabold uppercase tracking-wider text-krust">View →</span></div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -106,7 +108,7 @@ function HamperDetail({ hamper, onBack, onAdded }: { hamper: Hamper; onBack?: ()
   const add = useAddHamper(onAdded);
   return (
     <div className="fade-in grid gap-6 md:grid-cols-[1fr_1.05fr]">
-      <div className="relative overflow-hidden rounded-[22px] border-2 border-[#f5c542]/60 bg-peach"><img src={hamper.imageUrl} alt={hamper.name} className="h-64 w-full object-cover md:h-full" />{hamper.badge && <span className="badge absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}</div>
+      <div className="relative"><PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={4000} thumbnails className="[&>div:first-child]:aspect-square [&>div:first-child]:border-2 [&>div:first-child]:border-[#f5c542]/60" />{hamper.badge && <span className="badge pointer-events-none absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}</div>
       <div>
         {onBack && <button onClick={onBack} className="mb-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-cocoa hover:text-krust"><ArrowLeft size={13} /> All hampers</button>}
         <h3 className="text-3xl leading-tight">{hamper.name}</h3>
@@ -126,13 +128,14 @@ function HamperDetail({ hamper, onBack, onAdded }: { hamper: Hamper; onBack?: ()
 export function HamperPopup({ festive, hampers, onClose, onAdded }: { festive: Festive; hampers: Hamper[]; onClose: () => void; onAdded: () => void }) {
   const [selected, setSelected] = useState<Hamper | null>(hampers.length === 1 ? hampers[0] : null);
   useEffect(() => { const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose(); addEventListener("keydown", esc); return () => removeEventListener("keydown", esc); }, [onClose]);
+  useBackClose(true, onClose);
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-ink/55 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={festive.title}>
       <button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="Close" />
       <div className="reveal relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[30px] border-[3px] border-[#f5c542] bg-cream shadow-[0_40px_100px_-30px_rgba(0,0,0,.6)]">
+        <div className="sticky top-0 z-20 flex h-0 justify-end"><button onClick={onClose} aria-label="Close" className="mr-3 mt-3 flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 text-sm font-extrabold text-ink shadow-lg ring-2 ring-[#f5c542] transition hover:bg-blush sm:h-12"><X size={20} strokeWidth={2.6} /> Close</button></div>
         <div className="relative overflow-hidden bg-gradient-to-br from-krust via-[#c81c22] to-[#8f1218] px-6 py-7 text-white sm:px-9">
           <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 15% 30%, #ffd45c 0 2px, transparent 3px), radial-gradient(circle at 80% 20%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 60% 80%, #ffd45c 0 2px, transparent 3px), radial-gradient(circle at 35% 75%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "120px 90px" }} />
-          <button onClick={onClose} aria-label="Close" className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 hover:bg-white/25"><X size={18} /></button>
           <p className="relative flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-[#ffd45c]"><Gift size={14} /> Festive hampers</p>
           <h2 className="relative mt-2 text-4xl leading-tight sm:text-5xl">{festive.title}</h2>
           <p className="relative mt-2 max-w-xl text-sm text-white/85">{festive.subtitle}</p>
@@ -140,6 +143,7 @@ export function HamperPopup({ festive, hampers, onClose, onAdded }: { festive: F
         <div className="p-5 sm:p-8">
           {selected ? <HamperDetail hamper={selected} onBack={hampers.length > 1 ? () => setSelected(null) : undefined} onAdded={onAdded} />
             : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3">{hampers.map((h) => <HamperCard key={h.id} hamper={h} onOpen={() => setSelected(h)} />)}</div>}
+          <button onClick={onClose} className="mx-auto mt-6 block rounded-full px-6 py-3 text-sm font-bold text-cocoa underline-offset-4 hover:text-krust hover:underline">Maybe later, continue shopping</button>
         </div>
       </div>
     </div>
@@ -245,9 +249,9 @@ export function useTapSparkles(enabled: boolean) {
     if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const onDown = (e: PointerEvent) => {
       if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < 5; i++) {
         const el = document.createElement("span");
-        const angle = (Math.PI * 2 * i) / 9 + Math.random() * 0.4;
+        const angle = (Math.PI * 2 * i) / 5 + Math.random() * 0.4;
         const dist = 26 + Math.random() * 22;
         el.className = "tap-sparkle";
         el.style.left = `${e.clientX}px`;
@@ -266,11 +270,11 @@ export function useTapSparkles(enabled: boolean) {
 }
 
 /** A single cracker now and then while the customer browses. */
-export function AmbientFireworks({ everySeconds = 18 }: { everySeconds?: number }) {
+export function AmbientFireworks({ everySeconds = 60 }: { everySeconds?: number }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, everySeconds * 1000);
     return () => clearInterval(id);
   }, [everySeconds]);
-  return <Fireworks burst={tick} seconds={0.9} />;
+  return <Fireworks burst={tick} seconds={0.6} />;
 }

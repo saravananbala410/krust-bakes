@@ -4,7 +4,7 @@ import { sqliteDatabase } from "./db";
 const env = process.env;
 import { z } from "zod";
 import {
-  HAMPER_CATEGORY, ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, sellableCatalog, slug,
+  galleryOf, HAMPER_CATEGORY, ORDER_STATUSES, PAYMENT_STATUSES, seedConfig, sellableCatalog, slug,
   type AdminAction, type AdminData, type Customer, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
 } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
@@ -43,6 +43,11 @@ export function ready() {
     // One page view per visitor, page and day: refreshing must not raise the counts. Old duplicates are removed once.
     await database().prepare("DELETE FROM page_views WHERE id NOT IN (SELECT MIN(id) FROM page_views GROUP BY day, visitor, path)").run();
     await database().prepare("CREATE UNIQUE INDEX IF NOT EXISTS page_views_unique ON page_views (day, visitor, path)").run();
+    // Visits keyed by person: "c:<customer id>" when signed in, else "d:<device id>". One row per person, page and day.
+    await database().prepare("CREATE TABLE IF NOT EXISTS page_visits (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, day TEXT NOT NULL, who TEXT NOT NULL, device TEXT NOT NULL, path TEXT NOT NULL)").run();
+    await database().prepare("CREATE UNIQUE INDEX IF NOT EXISTS page_visits_unique ON page_visits (day, who, path)").run();
+    await database().prepare("CREATE INDEX IF NOT EXISTS page_visits_device ON page_visits (day, device)").run();
+    await database().prepare("INSERT OR IGNORE INTO page_visits (at, day, who, device, path) SELECT MIN(at), day, 'd:' || visitor, visitor, path FROM page_views GROUP BY day, visitor, path").run();
   }).catch((error) => { schemaReady = null; throw error; });
   return schemaReady;
 }
@@ -284,7 +289,9 @@ function cleanProduct(p: Product, config: PublicConfig): Product {
   if (!variants.length) throw new HttpError(400, "Add at least one size and price");
   const gstRate = Number(p.gstRate);
   if (!config.settings.gstRates.includes(gstRate)) throw new HttpError(400, "Choose a configured GST rate");
-  return { id: text(p.id, 80) || crypto.randomUUID(), name, description: text(p.description, 400), category: p.category, eggless: !!p.eggless, hsn: text(p.hsn, 12) || "1905", gstRate, accent: text(p.accent, 20) || "#f6c9c9", crop: text(p.crop, 30) || "50% 50%", imageUrl: text(p.imageUrl, 300) || "/brand/krust-hero.png", active: p.active !== false, featured: !!p.featured, variants };
+  const images = galleryOf({ imageUrl: text(p.imageUrl, 300), images: (p.images ?? []).map((u) => text(u, 300)) });
+  if (!images.length) images.push("/brand/krust-hero.png");
+  return { id: text(p.id, 80) || crypto.randomUUID(), name, description: text(p.description, 1500), images, category: p.category, eggless: !!p.eggless, hsn: text(p.hsn, 12) || "1905", gstRate, accent: text(p.accent, 20) || "#f6c9c9", crop: text(p.crop, 30) || "50% 50%", imageUrl: images[0], active: p.active !== false, featured: !!p.featured, variants };
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T) {
@@ -493,7 +500,7 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
       const price = Math.round(Number(h.price) * 100) / 100;
       const hamper = {
         id: text(h.id, 80) || `${slug(text(h.name, 60))}-${Date.now().toString(36)}`,
-        name: text(h.name, 100), description: text(h.description, 400), imageUrl: text(h.imageUrl, 300) || "/brand/krust-hero.png",
+        name: text(h.name, 100), description: text(h.description, 600), ...(() => { const images = galleryOf({ imageUrl: text(h.imageUrl, 300), images: (h.images ?? []).map((u) => text(u, 300)) }); if (!images.length) images.push("/brand/krust-hero.png"); return { imageUrl: images[0], images }; })(),
         price, gstRate: Number(h.gstRate), badge: text(h.badge, 30) || undefined, active: h.active !== false,
         contents: (h.contents ?? []).map((c) => text(c, 120)).filter(Boolean).slice(0, 30),
       };

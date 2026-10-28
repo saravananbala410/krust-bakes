@@ -17,6 +17,8 @@ export type Product = {
   accent: string;
   crop: string;
   imageUrl?: string;
+  /** Photo gallery; the first photo is also `imageUrl`. */
+  images?: string[];
   active?: boolean;
   featured?: boolean;
   variants: Variant[];

@@ -10,19 +10,21 @@ import { useAppStore } from "@/lib/app-store";
 import { useCustomerStore } from "@/lib/customer-store";
 import { payOnline } from "@/lib/razorpay-client";
 import { downloadReceiptFor } from "@/lib/receipt-pdf";
-import { sellableCatalog, type CarouselSlide, type Hamper, type PublicConfig } from "@/lib/store-core";
+import { galleryOf, sellableCatalog, type CarouselSlide, type Hamper, type PublicConfig } from "@/lib/store-core";
 import { DiwaliGarland, FestiveLayer, HamperSection } from "./festive";
 import type { Product } from "@/lib/types";
-import { AccountSheet, GoogleButton } from "./customer-account";
+import { AccountContent, AccountSheet, GoogleButton } from "./customer-account";
+import { PhotoCarousel } from "./photo-carousel";
+import { useBackClose } from "@/lib/use-back-close";
 import { socialIcons, socialLabels, WhatsAppIcon } from "./social-icons";
 
 const HERO = "/brand/krust-hero.png";
 const ConfigContext = createContext<PublicConfig | null>(null);
-export type StorePage = "home" | "shop" | "story";
+export type StorePage = "home" | "shop" | "story" | "orders" | "product";
 const PageContext = createContext<StorePage>("home");
 /** Where "order now" buttons point: the menu on this page, or the shop page. */
-const useShopHref = () => (useContext(PageContext) === "story" ? "/shop" : "#menu");
-const NAV: Array<[string, string]> = [["/shop", "Shop"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/#reviews", "Reviews"], ["#visit", "Visit"]];
+const useShopHref = () => { const page = useContext(PageContext); return page === "home" || page === "shop" ? "#menu" : "/shop"; };
+const NAV: Array<[string, string]> = [["/shop", "Shop"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/orders", "Your orders"], ["#visit", "Visit"]];
 const useConfig = () => useContext(ConfigContext)!;
 const noopSubscribe = () => () => {};
 /** False during SSR and hydration, true afterwards: keeps the persisted cart from causing hydration mismatches. */
@@ -68,7 +70,7 @@ function useScrollReveal(key: string) {
 }
 
 /** `initialCategory` comes from /shop?category=… so the shop opens pre-filtered. */
-export function Storefront({ initialConfig, page = "home", initialCategory }: { initialConfig: PublicConfig; page?: StorePage; initialCategory?: string }) {
+export function Storefront({ initialConfig, page = "home", initialCategory, productId }: { initialConfig: PublicConfig; page?: StorePage; initialCategory?: string; productId?: string }) {
   const live = useAppStore((state) => (state.loaded ? state.config : null));
   const refresh = useAppStore((state) => state.refresh);
   const refreshCustomer = useCustomerStore((state) => state.refresh);
@@ -82,10 +84,10 @@ export function Storefront({ initialConfig, page = "home", initialCategory }: { 
     } catch { return; }
     void fetch("/api/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor, path: window.location.pathname }), keepalive: true }).catch(() => undefined);
   }, []);
-  return <ConfigContext.Provider value={live ?? initialConfig}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} /></PageContext.Provider></ConfigContext.Provider>;
+  return <ConfigContext.Provider value={live ?? initialConfig}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} productId={productId} /></PageContext.Provider></ConfigContext.Provider>;
 }
 
-function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCategory?: string }) {
+function StorefrontPage({ page, initialCategory, productId }: { page: StorePage; initialCategory?: string; productId?: string }) {
   const config = useConfig();
   const { branding, settings, socialLinks } = config;
   const [category, setCategory] = useState(initialCategory ?? "All");
@@ -109,7 +111,7 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
   useScrollReveal(`${category}|${search}|${config.products.length}|${mounted}`);
 
   const pickCategory = (name: string) => { setCategory(name); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); };
-  const isActive = (href: string) => (href === "/shop" && page === "shop") || (href === "/our-story" && page === "story");
+  const isActive = (href: string) => (href === "/shop" && page === "shop") || (href === "/our-story" && page === "story") || (href === "/orders" && page === "orders");
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-cream pb-28">
@@ -138,7 +140,11 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
       </header>
       {config.festive.enabled && <DiwaliGarland />}
 
-      {page === "home" ? <Hero /> : <PageBanner page={page} />}
+      {page === "home" ? <Hero /> : page === "product" ? null : <PageBanner page={page} />}
+
+      {page === "product" && productId && <ProductDetail productId={productId} />}
+
+      {page === "orders" && <section className="mx-auto max-w-3xl px-5 py-10"><AccountContent clientId={settings.googleClientId} online={!!config.payments?.razorpay} /></section>}
 
       {page === "home" && <>
 
@@ -174,16 +180,16 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
 
       </>}
 
-      {page !== "story" && liveHampers.length > 0 && <HamperSection festive={config.festive} hampers={liveHampers} onOpen={openHamper} />}
+      {(page === "home" || page === "shop") && liveHampers.length > 0 && <HamperSection festive={config.festive} hampers={liveHampers} onOpen={openHamper} />}
 
-      {page !== "story" && featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
+      {(page === "home" || page === "shop") && featured.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
         <SectionHeading eyebrow="Bestsellers" title="The ones they come back for" />
         <div className="no-scrollbar -mx-5 mt-10 flex snap-x gap-4 overflow-x-auto px-5 pb-4">
           {featured.map((p) => <div key={p.id} className="w-[200px] shrink-0 snap-start sm:w-[290px]"><ProductCard product={p} /></div>)}
         </div>
       </section>}
 
-      {page !== "story" && <section id="menu" className="mx-auto max-w-[1440px] px-5 py-20 lg:px-10 lg:py-28">
+      {(page === "home" || page === "shop") && <section id="menu" className="mx-auto max-w-[1440px] px-5 py-20 lg:px-10 lg:py-28">
         <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <SectionHeading eyebrow="The daily bake" title="Choose your favourites." copy="All prices include GST. Pick a size, set the quantity and your total updates instantly." />
           <label className="flex h-12 w-full items-center gap-3 rounded-full border border-petal bg-white px-5 shadow-sm transition focus-within:border-krust lg:w-80"><Search size={17} className="text-cocoa" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the bake…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-cocoa/60" /></label>
@@ -197,7 +203,7 @@ function StorefrontPage({ page, initialCategory }: { page: StorePage; initialCat
         {filtered.length === 0 && <div className="mt-8 rounded-3xl border border-dashed border-petal py-20 text-center text-sm text-cocoa">Nothing matched that search. Try another bake.</div>}
       </section>}
 
-      {page !== "shop" && <>
+      {(page === "home" || page === "story") && <>
 
       <StoryCarousel slides={config.slides.filter((s) => s.active)} />
 
@@ -396,10 +402,12 @@ function StorySection() {
   );
 }
 
-function PageBanner({ page }: { page: Exclude<StorePage, "home"> }) {
+function PageBanner({ page }: { page: Exclude<StorePage, "home" | "product"> }) {
   const copy = page === "shop"
     ? { eyebrow: "The daily bake", title: "Shop", accent: "fresh.", text: "Breads, tea cakes, cookies, brownies and savouries, baked this morning. All prices include GST." }
-    : { eyebrow: "From Melbourne to Madras", title: "Our", accent: "story.", text: "Sixteen years at the bench, one standard: honest ingredients, patient technique and everything made fresh." };
+    : page === "orders"
+      ? { eyebrow: "Your Krust account", title: "Your", accent: "orders.", text: "Every order you've placed, its live status, receipts, and the option to pay online." }
+      : { eyebrow: "From Melbourne to Madras", title: "Our", accent: "story.", text: "Sixteen years at the bench, one standard: honest ingredients, patient technique and everything made fresh." };
   return (
     <section className="pastel-wash relative isolate overflow-hidden border-b border-petal/70">
       <div className="grain absolute inset-0 -z-10 opacity-60" />
@@ -442,11 +450,11 @@ function Hero() {
 }
 
 function AccountButton() {
-  const { customer, setAccountOpen } = useCustomerStore();
-  return <button onClick={() => setAccountOpen(true)} aria-label={customer ? "My account and orders" : "Sign in"} className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
+  const { customer } = useCustomerStore();
+  return <Link href="/orders" aria-label="Your orders" className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
     {customer?.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-blush"><UserRound size={16} /></span>}
-    <span className="hidden sm:inline">{customer ? "My orders" : "Sign in"}</span>
-  </button>;
+    <span className="hidden sm:inline">Your orders</span>
+  </Link>;
 }
 
 function AccountSheetHost({ clientId, online }: { clientId: string; online: boolean }) {
@@ -467,6 +475,55 @@ function ProductImage({ product, className = "" }: { product: Product; className
   return <img src={custom ? product.imageUrl : HERO} alt={product.name} className={`h-full w-full object-cover transition duration-700 group-hover:scale-110 ${custom ? "" : "scale-[1.6] group-hover:scale-[1.72]"} ${className}`} style={custom ? undefined : { objectPosition: product.crop }} />;
 }
 
+/** Full product page: photo gallery, sizes, quantity, details, and more from the same category. */
+function ProductDetail({ productId }: { productId: string }) {
+  const config = useConfig();
+  const product = config.products.find((p) => p.id === productId);
+  const [variantId, setVariantId] = useState(product?.variants[0]?.id);
+  const [qty, setQty] = useState(1);
+  const setQuantity = useCartStore((state) => state.setQuantity);
+  const inCart = useCartStore((state) => state.lines.find((l) => l.key === `${productId}:${variantId}`)?.quantity ?? 0);
+  const mounted = useHydrated();
+  if (!product) return <section className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-3xl">This product isn&apos;t available</h1><Link href="/shop" className="action mt-6">Back to the shop</Link></section>;
+  const variant = product.variants.find((v) => v.id === variantId) ?? product.variants[0];
+  const photos = galleryOf(product);
+  const related = config.products.filter((p) => p.id !== product.id && p.active !== false && p.category === product.category).slice(0, 4);
+  const add = () => { setQuantity(product.id, variant.id, (mounted ? inCart : 0) + qty); toast.success(`${qty} × ${product.name} added to basket`, { description: `${variant.name} · ${formatInr(variant.price * qty)}` }); };
+  return <>
+    <section className="mx-auto max-w-[1200px] px-5 py-8 lg:px-10 lg:py-12">
+      <nav className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-cocoa"><Link href="/" className="hover:text-krust">Home</Link><span>/</span><Link href={`/shop?category=${encodeURIComponent(product.category)}`} className="hover:text-krust">{product.category}</Link><span>/</span><span className="text-ink">{product.name}</span></nav>
+      <div className="mt-6 grid gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          {photos.length && !(photos.length === 1 && photos[0] === HERO)
+            ? <PhotoCarousel photos={photos} alt={product.name} thumbnails className="[&>div:first-child]:aspect-square [&>div:first-child]:border [&>div:first-child]:border-petal" rounded="rounded-[26px]" />
+            : <div className="group relative aspect-square overflow-hidden rounded-[26px] border border-petal bg-peach"><ProductImage product={product} /></div>}
+        </div>
+        <div>
+          <div className="flex flex-wrap gap-2"><span className="badge bg-blush text-krust">{product.category}</span><span className={`badge ${product.eggless ? "bg-mint text-[#2f7a4a]" : "bg-butter text-[#8a5a13]"}`}>{product.eggless ? "Eggless" : "Contains egg"}</span>{product.featured && <span className="badge bg-krust text-white"><Star size={10} fill="currentColor" /> Bestseller</span>}</div>
+          <h1 className="mt-4 text-4xl leading-tight sm:text-5xl">{product.name}</h1>
+          <p className="mt-4 font-display text-4xl font-extrabold text-krust">{formatInr(variant.price)}</p>
+          <p className="mt-1 text-xs font-semibold text-cocoa">Inclusive of {product.gstRate}% GST · {variant.name}</p>
+          {product.variants.length > 1 && <div className="mt-6"><p className="label">Choose size</p><div className="flex flex-wrap gap-2">{product.variants.map((v) => <button key={v.id} onClick={() => setVariantId(v.id)} className={`rounded-xl border-2 px-4 py-2.5 text-left text-sm font-bold transition ${v.id === variant.id ? "border-krust bg-blush text-krust" : "border-petal bg-white text-ink hover:border-krust"}`}>{v.name}<span className="block text-xs font-semibold text-cocoa">{formatInr(v.price)}</span></button>)}</div></div>}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="flex h-13 items-center rounded-xl border-2 border-petal bg-white"><button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Fewer" className="grid h-12 w-12 place-items-center"><Minus size={16} /></button><span className="w-10 text-center text-base font-extrabold">{qty}</span><button onClick={() => setQty((q) => Math.min(100, q + 1))} aria-label="More" className="grid h-12 w-12 place-items-center"><Plus size={16} /></button></div>
+            <button onClick={add} className="action h-13 flex-1 justify-center text-sm"><ShoppingBag size={17} /> Add to basket · {formatInr(variant.price * qty)}</button>
+          </div>
+          {mounted && inCart > 0 && <p className="mt-3 flex items-center gap-2 text-xs font-bold text-[#2f7a4a]"><Check size={14} /> {inCart} in your basket</p>}
+          {product.description && <div className="mt-8"><h2 className="text-2xl">About this bake</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-ink/85">{product.description}</p></div>}
+          <div className="mt-8 overflow-hidden rounded-2xl border border-petal bg-white">
+            {([["Size", product.variants.map((v) => v.name).join(", ")], ["Egg", product.eggless ? "Eggless" : "Contains egg"], ["Category", product.category], ["GST", `${product.gstRate}% (included in price)`], ["HSN code", product.hsn]] as const).map(([k, v]) => <div key={k} className="flex justify-between gap-4 border-b border-petal/60 px-5 py-3 text-sm last:border-0"><span className="text-cocoa">{k}</span><span className="text-right font-semibold">{v}</span></div>)}
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="flex gap-3 rounded-2xl bg-mint/60 p-4 text-xs"><Truck size={18} className="shrink-0 text-[#2f7a4a]" /><span><b className="block text-sm">Fresh delivery in Chennai</b>Home delivery on orders of {formatInr(config.settings.minimumOrder)} or more</span></div>
+            <div className="flex gap-3 rounded-2xl bg-butter/70 p-4 text-xs"><ChefHat size={18} className="shrink-0 text-[#8a5a13]" /><span><b className="block text-sm">Baked fresh daily</b>No MSG, no artificial colours</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    {related.length > 0 && <section className="mx-auto max-w-[1440px] px-5 pb-20 lg:px-10"><SectionHeading eyebrow="More to love" title={`More from ${product.category}`} /><div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">{related.map((p) => <ProductCard key={p.id} product={p} />)}</div></section>}
+  </>;
+}
+
 function ProductCard({ product }: { product: Product }) {
   const [variantId, setVariantId] = useState(product.variants[0]?.id);
   const setQuantity = useCartStore((state) => state.setQuantity);
@@ -478,17 +535,18 @@ function ProductCard({ product }: { product: Product }) {
   const add = () => { setQuantity(product.id, variant.id, 1); toast.success(`${product.name} added to basket`); };
   return (
     <article className="lift group flex h-full flex-col overflow-hidden rounded-[20px] border border-petal bg-white sm:rounded-[26px]">
-      <div className="relative h-36 overflow-hidden bg-peach sm:h-52">
+      <Link href={`/product/${product.id}`} aria-label={`View ${product.name}`} className="relative block h-36 overflow-hidden bg-peach sm:h-52">
         <ProductImage product={product} />
+        {galleryOf(product).length > 1 && <span className="badge absolute bottom-2 right-2 bg-white/90 !px-2 !text-[9px] text-ink">{galleryOf(product).length} photos</span>}
         <div className="absolute inset-0 bg-gradient-to-t from-ink/30 to-transparent" />
         <div className="absolute left-2 top-2 flex flex-wrap gap-1.5 sm:left-4 sm:top-4 sm:gap-2">
           <span className={`badge !px-2 !text-[8px] sm:!px-[.7rem] sm:!text-[10px] ${product.eggless ? "bg-mint text-[#2f7a4a]" : "bg-butter text-[#8a5a13]"}`}>{product.eggless ? "Eggless" : "Egg"}</span>
           {product.featured && <span className="badge !px-2 !text-[8px] bg-krust text-white sm:!px-[.7rem] sm:!text-[10px]"><Star size={10} fill="currentColor" /> <span className="hidden sm:inline">Bestseller</span></span>}
         </div>
-      </div>
+      </Link>
       <div className="flex flex-1 flex-col p-3 sm:p-5">
         <p className="text-[9px] font-extrabold uppercase tracking-[.18em] text-krust sm:text-[10px]">{product.category}</p>
-        <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><h3 className="text-[15px] leading-snug sm:text-2xl sm:leading-tight">{product.name}</h3><p className="shrink-0 font-display text-lg font-extrabold text-krust sm:text-xl">{formatInr(variant.price)}</p></div>
+        <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><Link href={`/product/${product.id}`} className="hover:text-krust"><h3 className="text-[15px] leading-snug sm:text-2xl sm:leading-tight">{product.name}</h3></Link><p className="shrink-0 font-display text-lg font-extrabold text-krust sm:text-xl">{formatInr(variant.price)}</p></div>
         <p className="mt-2 hidden min-h-10 text-xs leading-5 text-cocoa sm:block">{product.description}</p>
         <div className="mt-auto flex flex-col gap-2 pt-3 sm:flex-row sm:items-center sm:gap-3 sm:pt-5">
           <div className="relative min-w-0 flex-1"><select value={variant.id} onChange={(e) => setVariantId(e.target.value)} aria-label={`Select ${product.name} size`} className="h-9 w-full appearance-none rounded-lg border border-petal bg-cream px-2.5 pr-7 text-[11px] font-bold outline-none focus:border-krust sm:h-11 sm:rounded-xl sm:px-3 sm:text-xs">{product.variants.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatInr(item.price)}</option>)}</select><ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-cocoa" /></div>
@@ -568,6 +626,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [today] = useState(localToday);
+  useBackClose(true, onClose);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

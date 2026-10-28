@@ -39,7 +39,7 @@ export type Story = {
   imageUrl: string; statValue: string; statLabel: string; team: TeamMember[];
 };
 /** A festive gift hamper: sold as one basket item at a fixed price. */
-export type Hamper = { id: string; name: string; description: string; imageUrl: string; price: number; gstRate: number; contents: string[]; badge?: string; active: boolean };
+export type Hamper = { id: string; name: string; description: string; imageUrl: string; images?: string[]; price: number; gstRate: number; contents: string[]; badge?: string; active: boolean };
 /** Festive mode: the hamper popup and the fireworks. */
 export type Festive = { enabled: boolean; fireworks: boolean; title: string; subtitle: string; popupDelaySeconds: number; repeatMinutes: number };
 export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRates: number[]; gstin: string; fssai: string; legalName: string; placeOfSupply: string; googleClientId: string };
@@ -156,8 +156,14 @@ export function sellableCatalog(config: Pick<PublicConfig, "products" | "hampers
     ...config.products,
     ...(config.hampers ?? []).filter((h) => h.active).map((h): Product => ({
       id: hamperProductId(h.id), name: h.name, description: h.description, category: HAMPER_CATEGORY, eggless: false, hsn: "1905",
-      gstRate: h.gstRate, accent: "#f6c9c9", crop: "50% 50%", imageUrl: h.imageUrl, active: true, featured: false,
+      gstRate: h.gstRate, accent: "#f6c9c9", crop: "50% 50%", imageUrl: h.imageUrl, images: galleryOf(h), active: true, featured: false,
       variants: [{ id: HAMPER_VARIANT, name: "Gift hamper", price: h.price }],
     })),
   ];
+}
+
+export const MAX_PHOTOS = 8;
+/** All photos of a product or hamper, main photo first, without duplicates or blanks. */
+export function galleryOf(item: { imageUrl?: string; images?: string[] }): string[] {
+  return [...new Set([item.imageUrl, ...(item.images ?? [])].filter((u): u is string => !!u && !!u.trim()))].slice(0, MAX_PHOTOS);
 }

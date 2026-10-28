@@ -2,18 +2,37 @@ import { database, ready } from "./store";
 
 const IST_OFFSET_MINUTES = 330;
 const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|whatsapp|headless|lighthouse|monitor|curl|wget|python|axios|node-fetch/i;
-const TRACKED_PATHS = /^\/(shop|our-story)?$/;
+const TRACKED_PATHS = /^\/(shop|our-story|orders|product\/[\w-]+)?$/;
 
 /** YYYY-MM-DD in Indian Standard Time. */
 const istDay = (d = new Date()) => new Date(d.getTime() + IST_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
 
-/** Records one storefront page view for an anonymous visitor id. Bots are ignored. */
-export async function recordVisit(visitor: string, path: string, userAgent: string | null) {
+/**
+ * Records a storefront visit, counted once per person, page and day.
+ * A signed-in customer is one person on every device ("c:<id>"); a different email is a different person.
+ * Without sign-in the device is the person ("d:<device id>"). Browsing first and signing in later the
+ * same day merges into one person. Bots are ignored.
+ */
+export async function recordVisit(device: string, path: string, userAgent: string | null, customerId?: string | null) {
   if (!userAgent || BOT.test(userAgent)) return;
-  if (!/^[a-z0-9-]{16,64}$/i.test(visitor) || !TRACKED_PATHS.test(path)) return;
+  if (!/^[a-z0-9-]{16,64}$/i.test(device) || !TRACKED_PATHS.test(path)) return;
   await ready();
+  const db = database();
   const now = new Date();
-  await database().prepare("INSERT OR IGNORE INTO page_views (at, day, visitor, path) VALUES (?, ?, ?, ?)").bind(now.toISOString(), istDay(now), visitor, path).run();
+  const day = istDay(now);
+  const anonymous = `d:${device}`;
+  let who = anonymous;
+  if (customerId) {
+    who = `c:${customerId}`;
+    // This device's earlier anonymous visits today belong to this customer.
+    await db.prepare("UPDATE OR IGNORE page_visits SET who = ? WHERE day = ? AND who = ?").bind(who, day, anonymous).run();
+    await db.prepare("DELETE FROM page_visits WHERE day = ? AND who = ?").bind(day, anonymous).run();
+  } else {
+    // Signed out on a device that was signed in today: still the same person.
+    const known = await db.prepare("SELECT who FROM page_visits WHERE day = ? AND device = ? AND who LIKE 'c:%' ORDER BY at DESC LIMIT 1").bind(day, device).first<{ who: string }>();
+    if (known) who = known.who;
+  }
+  await db.prepare("INSERT OR IGNORE INTO page_visits (at, day, who, device, path) VALUES (?, ?, ?, ?, ?)").bind(now.toISOString(), day, who, device, path).run();
 }
 
 export type DailyStat = { day: string; visitors: number; pageViews: number; orders: number; revenue: number };
@@ -30,11 +49,13 @@ export async function getAnalytics(): Promise<Analytics> {
   const today = istDay();
   const from = istDay(new Date(Date.now() - 29 * 86_400_000));
   const db = database();
+  const pageGroup = "CASE WHEN path LIKE '/product/%' THEN '/product' ELSE path END";
   const [views, orders, pages, totals, buyers] = await Promise.all([
-    db.prepare("SELECT day, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS pageViews FROM page_views WHERE day >= ? GROUP BY day").bind(from).all<{ day: string; visitors: number; pageViews: number }>(),
+    db.prepare("SELECT day, COUNT(DISTINCT who) AS visitors, COUNT(*) AS pageViews FROM page_visits WHERE day >= ? GROUP BY day").bind(from).all<{ day: string; visitors: number; pageViews: number }>(),
     db.prepare(`SELECT date(created_at, '+${IST_OFFSET_MINUTES} minutes') AS day, COUNT(*) AS orders, COALESCE(SUM(json_extract(data, '$.total')), 0) AS revenue FROM orders WHERE deleted = 0 AND json_extract(data, '$.status') != 'CANCELLED' AND date(created_at, '+${IST_OFFSET_MINUTES} minutes') >= ? GROUP BY day`).bind(from).all<{ day: string; orders: number; revenue: number }>(),
-    db.prepare("SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM page_views WHERE day >= ? GROUP BY path ORDER BY views DESC").bind(from).all<{ path: string; views: number; visitors: number }>(),
-    db.prepare("SELECT COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS pageViews FROM page_views WHERE day >= ?").bind(from).first<{ visitors: number; pageViews: number }>(),
+    db.prepare(`SELECT ${pageGroup} AS path, COUNT(*) AS views, COUNT(DISTINCT who) AS visitors FROM page_visits WHERE day >= ? GROUP BY ${pageGroup} ORDER BY views DESC`).bind(from).all<{ path: string; views: number; visitors: number }>(),
+    // A person counts once per day, so 30-day visitors are person-days added up.
+    db.prepare("SELECT COUNT(*) AS visitors, COALESCE(SUM(n), 0) AS pageViews FROM (SELECT day, who, COUNT(*) AS n FROM page_visits WHERE day >= ? GROUP BY day, who)").bind(from).first<{ visitors: number; pageViews: number }>(),
     db.prepare(`SELECT COUNT(DISTINCT COALESCE(customer_id, json_extract(data, '$.phone'))) AS customers FROM orders WHERE deleted = 0 AND json_extract(data, '$.status') != 'CANCELLED' AND date(created_at, '+${IST_OFFSET_MINUTES} minutes') >= ?`).bind(from).first<{ customers: number }>(),
   ]);
 

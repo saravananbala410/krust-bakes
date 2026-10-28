@@ -1,12 +1,14 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 /**
  * SQLite database in a single file, exposed with the small subset of the
  * Cloudflare D1 API the store uses (prepare/bind/first/all/run, batch), so
- * the same SQL works unchanged. The file lives outside the app folder so
- * redeploys never touch it; set DATABASE_PATH to choose where.
+ * the same SQL works unchanged. In production the file lives in the home
+ * folder (~/krust-data), because hosts like Hostinger build every deploy in a
+ * fresh folder; set DATABASE_PATH to choose where.
  */
 type Row = Record<string, unknown>;
 
@@ -50,8 +52,16 @@ let instance: SqliteD1 | null = null;
 
 export function sqliteDatabase(): SqliteD1 {
   if (instance) return instance;
-  const file = process.env.DATABASE_PATH || path.join(process.cwd(), "..", "krust-data", "krust.db");
+  const legacy = path.join(process.cwd(), "..", "krust-data", "krust.db");
+  const file = process.env.DATABASE_PATH || (process.env.NODE_ENV === "production" ? path.join(os.homedir(), "krust-data", "krust.db") : legacy);
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // One-time move from the old location next to the build folder, so its orders are kept.
+  if (!fs.existsSync(file) && file !== legacy && fs.existsSync(legacy)) {
+    const old = new Database(legacy, { readonly: true });
+    old.prepare("VACUUM INTO ?").run(file);
+    old.close();
+  }
+  console.log(`Database: ${file}`);
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");

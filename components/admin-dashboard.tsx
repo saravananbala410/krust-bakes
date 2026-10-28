@@ -208,7 +208,7 @@ type Analytics = {
   days: Array<{ day: string; visitors: number; pageViews: number; orders: number; revenue: number }>;
   pages: Array<{ path: string; views: number; visitors: number }>;
 };
-const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story", "/orders": "Your orders", "/product": "Product pages" };
+const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story", "/orders": "My orders", "/product": "Product pages" };
 
 function Visitors() {
   const [data, setData] = useState<Analytics | null>(null);

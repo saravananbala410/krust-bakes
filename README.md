@@ -13,7 +13,7 @@ npm run dev
 
 Open http://localhost:5173. Admin: http://localhost:5173/admin.
 
-Settings go in `.env.local` (copy `.env.example`). Without `DATABASE_PATH`, the database is created at `../krust-data/krust.db`, outside the project folder.
+Settings go in `.env.local` (copy `.env.example`). Without `DATABASE_PATH`, the database is `~/krust-data/krust.db` (home folder) in production and `../krust-data/krust.db` in development, so redeploys never replace it.
 
 ## Production (Hostinger Node.js web app)
 
@@ -34,4 +34,4 @@ npx wrangler d1 export krust-db --remote --output live-export.sql
 node scripts/import-d1-dump.mjs live-export.sql krust.db
 ```
 
-Upload `krust.db` to the server's `krust-data` folder while the app is stopped.
+Upload `krust.db` to `~/krust-data` on the server while the app is stopped.

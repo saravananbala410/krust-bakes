@@ -25,7 +25,7 @@ export type StorePage = "home" | "shop" | "story" | "orders" | "product";
 const PageContext = createContext<StorePage>("home");
 /** Where "order now" buttons point: the menu on this page, or the shop page. */
 const useShopHref = () => { const page = useContext(PageContext); return page === "home" || page === "shop" ? "#menu" : "/shop"; };
-const NAV: Array<[string, string]> = [["/shop", "Shop"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/orders", "Your orders"], ["#visit", "Visit"]];
+const NAV: Array<[string, string]> = [["/shop", "Shop"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/orders", "My orders"], ["#visit", "Visit"]];
 const useConfig = () => useContext(ConfigContext)!;
 const noopSubscribe = () => () => {};
 /** False during SSR and hydration, true afterwards: keeps the persisted cart from causing hydration mismatches. */
@@ -129,6 +129,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
           </nav>
           <div className="flex items-center gap-2">
             <SocialRow links={socialLinks} className="hidden xl:flex" small />
+            <MyOrdersButton />
             <AccountButton />
             <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
@@ -450,11 +451,19 @@ function Hero() {
   );
 }
 
+/** Sign-in and account only; orders have their own button. */
 function AccountButton() {
-  const { customer } = useCustomerStore();
-  return <Link href="/orders" aria-label="Your orders" className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
+  const { customer, setAccountOpen } = useCustomerStore();
+  const label = customer ? customer.name.split(" ")[0] : "Sign in";
+  return <button onClick={() => setAccountOpen(true)} aria-label={customer ? "Your account" : "Sign in"} className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
     {customer?.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-blush"><UserRound size={16} /></span>}
-    <span className="hidden sm:inline">Your orders</span>
+    <span className="hidden max-w-24 truncate sm:inline">{label}</span>
+  </button>;
+}
+
+function MyOrdersButton() {
+  return <Link href="/orders" aria-label="My orders" className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white px-2.5 text-sm font-extrabold text-krust transition hover:bg-blush sm:px-4">
+    <PackageCheck size={17} /><span className="hidden sm:inline">My orders</span>
   </Link>;
 }
 

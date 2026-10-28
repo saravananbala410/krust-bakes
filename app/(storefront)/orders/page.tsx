@@ -4,7 +4,7 @@ import { getConfig } from "@/lib/server/store";
 import { seedConfig } from "@/lib/store-core";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Your orders | Krust Artisan Bakes" };
+export const metadata: Metadata = { title: "My orders | Krust Artisan Bakes" };
 
 export default async function OrdersPage() {
   const config = await getConfig().catch(() => seedConfig());

@@ -118,7 +118,7 @@ function TrackOrder() {
   </div>;
 }
 
-/** Sign-in, order history and guest tracking; used on the Your orders page and in the slide-over. */
+/** Sign-in, order history and guest tracking; used on the My orders page and in the slide-over. */
 export function AccountContent({ clientId, online = false, onNavigate }: { clientId: string; online?: boolean; onNavigate?: () => void }) {
   const { customer, orders, signOut, loaded } = useCustomerStore();
   if (!loaded) return <div className="grid min-h-48 place-items-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-petal border-t-krust" /></div>;
@@ -143,6 +143,20 @@ export function AccountContent({ clientId, online = false, onNavigate }: { clien
   </>;
 }
 
+/** Signed-in profile with a link to My orders; the orders themselves live on their own page. */
+function AccountSummary({ onNavigate }: { onNavigate: () => void }) {
+  const { customer, orders, signOut } = useCustomerStore();
+  if (!customer) return null;
+  return <>
+    <div className="flex items-center gap-4 rounded-3xl border-2 border-krust bg-white p-5">
+      {customer.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full border-2 border-krust object-cover" /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-krust text-white"><UserRound size={22} /></span>}
+      <div className="min-w-0 flex-1"><p className="truncate text-lg font-extrabold">{customer.name}</p><p className="truncate text-xs font-semibold text-cocoa">{customer.email}</p></div>
+    </div>
+    <Link href="/orders" onClick={onNavigate} className="action mt-5 w-full justify-center">My orders{orders.length ? ` (${orders.length})` : ""} <ArrowRight size={14} /></Link>
+    <button onClick={() => void signOut().then(() => { toast.success("Signed out"); onNavigate(); })} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-petal bg-white py-3 text-xs font-extrabold text-krust hover:border-krust"><LogOut size={14} /> Sign out</button>
+  </>;
+}
+
 /** Slide-over version of the account, opened from checkout. The Back button closes it. */
 export function AccountSheet({ clientId, online = false }: { clientId: string; online?: boolean }) {
   const { customer, setAccountOpen } = useCustomerStore();
@@ -150,7 +164,7 @@ export function AccountSheet({ clientId, online = false }: { clientId: string; o
   useEffect(() => { const esc = (e: KeyboardEvent) => e.key === "Escape" && setAccountOpen(false); window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [setAccountOpen]);
   useBackClose(true, close);
   return <div className="fixed inset-0 z-50 flex justify-end bg-ink/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Your account"><button onClick={close} className="absolute inset-0 cursor-default" aria-label="Close" /><aside className="relative h-full w-full max-w-[560px] overflow-y-auto bg-cream shadow-2xl" style={{ animation: "slide-in-right .45s cubic-bezier(.2,.8,.2,1) both" }}>
-    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Your Krust account</p><h2 className="text-3xl">{customer ? "Your orders" : "Sign in"}</h2></div><button onClick={close} className="grid h-11 w-11 place-items-center rounded-full border-2 border-petal bg-white" aria-label="Close"><X size={20} /></button></div>
-    <div className="px-5 py-7 sm:px-8"><AccountContent clientId={clientId} online={online} onNavigate={close} /></div>
+    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-petal bg-cream/95 px-5 py-5 backdrop-blur sm:px-8"><div><p className="eyebrow">Your Krust account</p><h2 className="text-3xl">{customer ? "Your account" : "Sign in"}</h2></div><button onClick={close} className="grid h-11 w-11 place-items-center rounded-full border-2 border-petal bg-white" aria-label="Close"><X size={20} /></button></div>
+    <div className="px-5 py-7 sm:px-8">{customer ? <AccountSummary onNavigate={close} /> : <AccountContent clientId={clientId} online={online} onNavigate={close} />}</div>
   </aside></div>;
 }

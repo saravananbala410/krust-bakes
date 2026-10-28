@@ -13,7 +13,7 @@ export async function recordVisit(visitor: string, path: string, userAgent: stri
   if (!/^[a-z0-9-]{16,64}$/i.test(visitor) || !TRACKED_PATHS.test(path)) return;
   await ready();
   const now = new Date();
-  await database().prepare("INSERT INTO page_views (at, day, visitor, path) VALUES (?, ?, ?, ?)").bind(now.toISOString(), istDay(now), visitor, path).run();
+  await database().prepare("INSERT OR IGNORE INTO page_views (at, day, visitor, path) VALUES (?, ?, ?, ?)").bind(now.toISOString(), istDay(now), visitor, path).run();
 }
 
 export type DailyStat = { day: string; visitors: number; pageViews: number; orders: number; revenue: number };

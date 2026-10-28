@@ -40,6 +40,9 @@ export function ready() {
     // Orders created before customer accounts existed lack this column; adding it again fails harmlessly.
     await database().prepare("ALTER TABLE orders ADD COLUMN customer_id TEXT").run().catch(() => undefined);
     await database().prepare("CREATE INDEX IF NOT EXISTS orders_customer ON orders (customer_id)").run();
+    // One page view per visitor, page and day: refreshing must not raise the counts. Old duplicates are removed once.
+    await database().prepare("DELETE FROM page_views WHERE id NOT IN (SELECT MIN(id) FROM page_views GROUP BY day, visitor, path)").run();
+    await database().prepare("CREATE UNIQUE INDEX IF NOT EXISTS page_views_unique ON page_views (day, visitor, path)").run();
   }).catch((error) => { schemaReady = null; throw error; });
   return schemaReady;
 }

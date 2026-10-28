@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CakeSlice, Coffee, Cookie, Croissant, Gift, Hamburger, Layers, Pizza, Wheat, ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
-import { createContext, FormEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createContext, FormEvent, type MouseEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
 import { useCartStore } from "@/lib/cart-store";
@@ -529,12 +530,15 @@ function ProductCard({ product }: { product: Product }) {
   const setQuantity = useCartStore((state) => state.setQuantity);
   const quantity = useCartStore((state) => state.lines.find((line) => line.key === `${product.id}:${variantId}`)?.quantity ?? 0);
   const mounted = useHydrated();
+  const router = useRouter();
   const variant = product.variants.find((item) => item.id === variantId) ?? product.variants[0];
   if (!variant) return null;
+  // Anywhere on the card opens the product, except the size picker and basket controls.
+  const open = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest("a, button, select, input")) router.push(`/product/${product.id}`); };
   const qty = mounted ? quantity : 0;
   const add = () => { setQuantity(product.id, variant.id, 1); toast.success(`${product.name} added to basket`); };
   return (
-    <article className="lift group flex h-full flex-col overflow-hidden rounded-[20px] border border-petal bg-white sm:rounded-[26px]">
+    <article onClick={open} className="lift group flex h-full cursor-pointer flex-col overflow-hidden rounded-[20px] border border-petal bg-white sm:rounded-[26px]">
       <Link href={`/product/${product.id}`} aria-label={`View ${product.name}`} className="relative block h-36 overflow-hidden bg-peach sm:h-52">
         <ProductImage product={product} />
         {galleryOf(product).length > 1 && <span className="badge absolute bottom-2 right-2 bg-white/90 !px-2 !text-[9px] text-ink">{galleryOf(product).length} photos</span>}

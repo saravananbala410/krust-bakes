@@ -16,9 +16,9 @@ export type AuditEntry = { id: string; at: string; actor: string; actorRole?: Ad
 /** DEV_ADMIN: head of the site, full access. SUPER_ADMIN: business owner view. SALES_ADMIN: orders and payments only. */
 export type AdminRole = "DEV_ADMIN" | "SUPER_ADMIN" | "SALES_ADMIN";
 export const ROLE_LABELS: Record<AdminRole, string> = { DEV_ADMIN: "Dev admin", SUPER_ADMIN: "Super admin", SALES_ADMIN: "Sales admin" };
-export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "Hampers" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History";
+export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "Hampers" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History" | "Visitors";
 export const ROLE_TABS: Record<AdminRole, AdminTab[]> = {
-  DEV_ADMIN: ["Overview", "Orders", "Recycle bin", "Products", "Categories", "Hampers", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
+  DEV_ADMIN: ["Overview", "Visitors", "Orders", "Recycle bin", "Products", "Categories", "Hampers", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
   SUPER_ADMIN: ["Overview", "Orders", "Hampers", "GST", "Customers & payments", "Settings", "History"],
   SALES_ADMIN: ["Orders", "Customers & payments"],
 };

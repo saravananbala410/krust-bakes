@@ -12,7 +12,7 @@ import { downloadXlsx } from "@/lib/xlsx";
 import { socialIcons, socialLabels } from "./social-icons";
 
 type Tab = AdminTab;
-const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["Hampers", Gift], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
+const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Visitors", Eye], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["Hampers", Gift], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
 const POLL_MS = 15000;
 
 export function AdminDashboard() {
@@ -67,6 +67,7 @@ export function AdminDashboard() {
       </header>
       <div key={tab} className="fade-in p-5 lg:p-8">
         {tab === "Overview" && <Overview go={setTab} />}
+        {tab === "Visitors" && <Visitors />}
         {tab === "Orders" && <Orders />}
         {tab === "Recycle bin" && <RecycleBin />}
         {tab === "Products" && <Products />}
@@ -195,6 +196,64 @@ function Overview({ go }: { go: (tab: Tab) => void }) {
     <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
       <Panel title="Recent orders" action="Manage orders" onAction={() => go("Orders")}><OrderTable orders={orders.slice(0, 6)} /></Panel>
       <Panel title="Latest changes" action="Full history" onAction={() => go("History")}><div className="divide-y divide-petal/70">{audit.slice(0, 8).map((e) => <div key={e.id} className="py-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold">{e.action}</p><span className="text-[10px] text-cocoa">{new Date(e.at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span></div><p className="mt-1 text-[11px] text-cocoa">{e.entity} · {e.detail} <span className="text-krust">· {e.actor}</span></p></div>)}{!audit.length && <p className="py-6 text-center text-xs text-cocoa">No activity yet.</p>}</div></Panel>
+    </div>
+  </div>;
+}
+
+// ---------- visitors (dev admin) ----------
+
+type Analytics = {
+  today: { visitors: number; pageViews: number; orders: number };
+  last30: { visitors: number; pageViews: number; orders: number; customers: number; revenue: number; conversion: number };
+  days: Array<{ day: string; visitors: number; pageViews: number; orders: number; revenue: number }>;
+  pages: Array<{ path: string; views: number; visitors: number }>;
+};
+const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story" };
+
+function Visitors() {
+  const [data, setData] = useState<Analytics | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch("/api/analytics", { cache: "no-store", credentials: "same-origin" })
+      .then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(b.error ?? "Could not load visitors"); if (alive) { setData(b); setError(""); } })
+      .catch((e: Error) => alive && setError(e.message));
+    void load();
+    const id = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  if (error) return <Empty icon={Eye} text={error} />;
+  if (!data) return <div className="grid min-h-64 place-items-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-petal border-t-krust" /></div>;
+  const max = Math.max(1, ...data.days.map((d) => d.visitors));
+  const dayLabel = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const notOrdered = Math.max(0, data.last30.visitors - data.last30.customers);
+  return <div className="space-y-6">
+    <Header title="Visitors" copy="How many people opened the website and how many of them ordered. Counted anonymously; bots and search engines are left out. Updates every minute." action={<button onClick={() => downloadXlsx("krust-visitors", { "Daily visitors": data.days.map((d) => ({ Date: d.day, Visitors: d.visitors, "Page views": d.pageViews, Orders: d.orders, Revenue: d.revenue })), Pages: data.pages.map((p) => ({ Page: PAGE_NAMES[p.path] ?? p.path, Visitors: p.visitors, Views: p.views })) })} className="action secondary"><Download size={14} /> Export XL</button>} />
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Metric label="Visitors today" value={String(data.today.visitors)} icon={Eye} tint="bg-lilac" />
+      <Metric label="Orders today" value={String(data.today.orders)} icon={ShoppingBag} tint="bg-mint" />
+      <Metric label="Visitors · 30 days" value={String(data.last30.visitors)} icon={Users} tint="bg-blush" />
+      <Metric label="Orders · 30 days" value={String(data.last30.orders)} icon={Receipt} tint="bg-peach" />
+    </div>
+    <Panel title="Visited vs ordered · last 30 days">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl bg-cream p-5"><p className="text-[11px] font-bold uppercase tracking-wider text-cocoa">Visited the site</p><p className="mt-2 font-display text-4xl">{data.last30.visitors}</p><p className="mt-1 text-xs text-cocoa">{data.last30.pageViews} page views</p></div>
+        <div className="rounded-2xl bg-mint p-5"><p className="text-[11px] font-bold uppercase tracking-wider text-[#2f7a4a]">Placed an order</p><p className="mt-2 font-display text-4xl text-[#2f7a4a]">{data.last30.customers}</p><p className="mt-1 text-xs text-[#2f7a4a]">{data.last30.orders} orders · {formatInr(data.last30.revenue)}</p></div>
+        <div className="rounded-2xl bg-blush p-5"><p className="text-[11px] font-bold uppercase tracking-wider text-krust">Conversion</p><p className="mt-2 font-display text-4xl text-krust">{data.last30.conversion}%</p><p className="mt-1 text-xs text-cocoa">orders per 100 visitors · {notOrdered} visited without ordering</p></div>
+      </div>
+    </Panel>
+    <Panel title="Daily visitors and orders">
+      <div className="flex items-center gap-4 text-[11px] font-bold text-cocoa"><span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-petal" /> Visitors</span><span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-krust" /> Orders</span></div>
+      <div className="mt-4 flex h-52 items-end gap-1">{data.days.map((d) => <div key={d.day} title={`${dayLabel(d.day)}: ${d.visitors} visitors, ${d.orders} orders`} className="group relative flex h-full flex-1 flex-col justify-end">
+        <div className="relative w-full rounded-t-md bg-petal transition group-hover:bg-[#e8c9a3]" style={{ height: `${(d.visitors / max) * 100}%`, minHeight: d.visitors ? 4 : 0 }}>
+          {d.orders > 0 && <div className="absolute inset-x-0 bottom-0 rounded-t-md bg-krust" style={{ height: `${Math.min(100, (d.orders / Math.max(1, d.visitors)) * 100)}%`, minHeight: 4 }} />}
+        </div>
+      </div>)}</div>
+      <div className="mt-2 flex justify-between text-[10px] font-semibold text-cocoa"><span>{dayLabel(data.days[0].day)}</span><span>{dayLabel(data.days[14].day)}</span><span>Today</span></div>
+    </Panel>
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Panel title="Most visited pages"><table className="w-full text-left text-xs"><thead className="text-[10px] uppercase tracking-wider text-cocoa"><tr><th className="pb-2">Page</th><th className="pb-2 text-right">Visitors</th><th className="pb-2 text-right">Views</th></tr></thead><tbody className="divide-y divide-petal/60">{data.pages.map((p) => <tr key={p.path}><td className="py-2.5 font-bold">{PAGE_NAMES[p.path] ?? p.path}</td><td className="py-2.5 text-right">{p.visitors}</td><td className="py-2.5 text-right">{p.views}</td></tr>)}</tbody></table>{!data.pages.length && <p className="py-6 text-center text-xs text-cocoa">No visits recorded yet.</p>}</Panel>
+      <Panel title="Last 7 days"><table className="w-full text-left text-xs"><thead className="text-[10px] uppercase tracking-wider text-cocoa"><tr><th className="pb-2">Date</th><th className="pb-2 text-right">Visitors</th><th className="pb-2 text-right">Orders</th><th className="pb-2 text-right">Revenue</th></tr></thead><tbody className="divide-y divide-petal/60">{data.days.slice(-7).reverse().map((d) => <tr key={d.day}><td className="py-2.5 font-bold">{dayLabel(d.day)}</td><td className="py-2.5 text-right">{d.visitors}</td><td className="py-2.5 text-right">{d.orders}</td><td className="py-2.5 text-right">{formatInr(d.revenue)}</td></tr>)}</tbody></table></Panel>
     </div>
   </div>;
 }

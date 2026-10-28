@@ -73,6 +73,15 @@ export function Storefront({ initialConfig, page = "home", initialCategory }: { 
   const refresh = useAppStore((state) => state.refresh);
   const refreshCustomer = useCustomerStore((state) => state.refresh);
   useEffect(() => { void refresh(); void refreshCustomer(); }, [refresh, refreshCustomer]);
+  // Anonymous visit count for the dev admin's Visitors page: a random id, no personal data.
+  useEffect(() => {
+    let visitor = "";
+    try {
+      visitor = localStorage.getItem("krust-visitor") ?? "";
+      if (!visitor) { visitor = crypto.randomUUID(); localStorage.setItem("krust-visitor", visitor); }
+    } catch { return; }
+    void fetch("/api/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor, path: window.location.pathname }), keepalive: true }).catch(() => undefined);
+  }, []);
   return <ConfigContext.Provider value={live ?? initialConfig}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} /></PageContext.Provider></ConfigContext.Provider>;
 }
 

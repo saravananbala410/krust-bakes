@@ -34,6 +34,8 @@ export function ready() {
     database().prepare("CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL)"),
     database().prepare("CREATE TABLE IF NOT EXISTS customers (id TEXT PRIMARY KEY, email TEXT NOT NULL, data TEXT NOT NULL)"),
     database().prepare("CREATE TABLE IF NOT EXISTS customer_sessions (token_hash TEXT PRIMARY KEY, customer_id TEXT NOT NULL, expires_at INTEGER NOT NULL)"),
+    database().prepare("CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, day TEXT NOT NULL, visitor TEXT NOT NULL, path TEXT NOT NULL)"),
+    database().prepare("CREATE INDEX IF NOT EXISTS page_views_day ON page_views (day)"),
   ]).then(async () => {
     // Orders created before customer accounts existed lack this column; adding it again fails harmlessly.
     await database().prepare("ALTER TABLE orders ADD COLUMN customer_id TEXT").run().catch(() => undefined);

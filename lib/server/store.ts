@@ -103,7 +103,16 @@ async function listAdmins(): Promise<AdminRecord[]> {
     await writeAdmin(root);
     return [root];
   }
-  return results.map((r) => normalizeRole(JSON.parse(r.data) as AdminRecord));
+  const admins = results.map((r) => normalizeRole(JSON.parse(r.data) as AdminRecord));
+  // Forgotten dev admin password: set ADMIN_RESET_PASSWORD on the host, sign in, then remove it.
+  const reset = process.env.ADMIN_RESET_PASSWORD?.trim();
+  const root = admins.find((a) => a.id === "root-admin");
+  if (reset && reset.length >= 8 && root && (await hashPassword(reset, root.salt)) !== root.passwordHash) {
+    const salt = crypto.randomUUID();
+    Object.assign(root, { salt, passwordHash: await hashPassword(reset, salt), active: true });
+    await writeAdmin(root);
+  }
+  return admins;
 }
 
 /** Maps accounts created before the three-role model: the main account is the dev admin, old "ADMIN" users become sales admins. */

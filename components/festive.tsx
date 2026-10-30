@@ -92,7 +92,7 @@ function HamperCard({ hamper, onOpen }: { hamper: Hamper; onOpen: () => void }) 
     <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="lift group flex h-full cursor-pointer flex-col overflow-hidden rounded-[22px] border-2 border-[#f5c542]/60 bg-white text-left">
       <div className="relative h-36 sm:h-44">
         <PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={3200} className="h-full [&>div]:h-full" rounded="rounded-none" />
-        {hamper.badge && <span className="badge pointer-events-none absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}
+        {hamper.badge && <span className="badge pointer-events-none absolute left-2 top-2 max-w-[calc(100%-1rem)] gap-1 whitespace-nowrap bg-krust !px-2 !py-1 !text-[8px] !tracking-[.08em] text-white sm:left-3 sm:top-3 sm:!px-[.7rem] sm:!text-[10px]"><Sparkles size={9} className="shrink-0" /><span className="truncate">{hamper.badge}</span></span>}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <p className="font-display text-lg leading-tight">{hamper.name}</p>

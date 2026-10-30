@@ -201,7 +201,7 @@ export async function getAdminData(viewer: AdminRecord): Promise<AdminData> {
   return { orders: live, recycleBin: parsed.filter((r) => r.deleted).map((r) => r.order), audit: entries, admins: admins.map(publicAdmin) };
 }
 
-const phone = z.string().trim().regex(/^\+?[0-9\s-]{10,16}$/, "Enter a valid phone number");
+const phone = z.string().trim().refine((v) => /^(\+?91)?[6-9]\d{9}$/.test(v.replace(/[\s-]/g, "")), "Enter a valid 10-digit mobile number");
 const placeOrderSchema = z.object({
   customer: z.string().trim().min(2).max(100),
   phone,

@@ -120,25 +120,25 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
 
       <header className="sticky top-0 z-40 border-b border-petal/70 bg-cream/85 backdrop-blur-xl">
         <div className="mx-auto flex h-[78px] max-w-[1440px] items-center justify-between px-5 lg:px-10">
-          <Link href="/" className="flex items-center gap-3" aria-label={`${branding.storeName} home`}>
+          <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${branding.storeName} home`}>
             <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-2xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)]" />
-            <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" /><p className="hidden text-[9px] font-semibold uppercase tracking-[.3em] text-cocoa sm:block">{branding.tagline}</p></div>
+            <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" /><p className="hidden whitespace-nowrap text-[9px] font-semibold uppercase tracking-[.3em] text-cocoa sm:block">{branding.tagline}</p></div>
           </Link>
-          <nav className="hidden items-center gap-8 text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa lg:flex">
+          <nav className="hidden items-center gap-6 whitespace-nowrap text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa xl:flex 2xl:gap-8">
             {NAV.map(([href, label]) => <a key={href} href={href} className={`relative transition hover:text-krust after:absolute after:-bottom-1 after:left-0 after:h-px after:bg-krust after:transition-all hover:after:w-full ${isActive(href) ? "text-krust after:w-full" : "after:w-0"}`}>{label}</a>)}
           </nav>
-          <div className="flex items-center gap-2">
-            <SocialRow links={socialLinks} className="hidden xl:flex" small />
+          <div className="flex shrink-0 items-center gap-2">
+            <SocialRow links={socialLinks} className="hidden 2xl:flex" small />
             <MyOrdersButton />
             <AccountButton />
             <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
               {cartItems > 0 && <span key={cartItems} className="reveal rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-krust">{cartItems}</span>}
             </button>
-            <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu" className="grid h-11 w-11 place-items-center rounded-full border border-petal bg-white lg:hidden"><Menu size={19} /></button>
+            <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu" className="grid h-11 w-11 place-items-center rounded-full border border-petal bg-white xl:hidden"><Menu size={19} /></button>
           </div>
         </div>
-        {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold lg:hidden"><div className="flex flex-col gap-4">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={isActive(href) ? "text-krust" : ""}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
+        {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold xl:hidden"><div className="flex flex-col gap-4">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={isActive(href) ? "text-krust" : ""}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
       </header>
       {config.festive.enabled && <DiwaliGarland />}
 
@@ -463,7 +463,7 @@ function AccountButton() {
 
 function MyOrdersButton() {
   return <Link href="/orders" aria-label="My orders" className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white px-2.5 text-sm font-extrabold text-krust transition hover:bg-blush sm:px-4">
-    <PackageCheck size={17} /><span className="hidden sm:inline">My orders</span>
+    <PackageCheck size={17} /><span className="hidden whitespace-nowrap sm:inline">My orders</span>
   </Link>;
 }
 
@@ -680,7 +680,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
         <div className="mt-6"><GoogleButton clientId={settings.googleClientId} /></div>
         <p className="mt-4 text-[11px] text-cocoa">We only use your name and email for your orders.</p>
       </div> : <>
-      <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} defaultValue={lastDetails?.name ?? customer?.name} /><Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" required defaultValue={lastDetails?.phone} /><Field label="WhatsApp number" name="whatsapp" type="tel" placeholder="Same as phone" defaultValue={lastDetails?.whatsapp} /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" defaultValue={customer?.email} readOnly={!!customer} /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" defaultValue={lastDetails?.address} /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required defaultValue={lastDetails?.pincode} /></div>
+      <SectionTitle number="01" title="Delivery details" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your name" required minLength={2} defaultValue={lastDetails?.name ?? customer?.name} /><Field label="Phone number" name="phone" placeholder="98765 43210" required {...MOBILE_INPUT} defaultValue={tenDigits(lastDetails?.phone)} /><Field label="WhatsApp number" name="whatsapp" placeholder="Same as phone" {...MOBILE_INPUT} defaultValue={tenDigits(lastDetails?.whatsapp)} /><Field label="Email (optional)" name="email" type="email" placeholder="you@example.com" defaultValue={customer?.email} readOnly={!!customer} /><label className="sm:col-span-2"><span className="label">Delivery address</span><textarea name="address" required minLength={8} rows={3} placeholder="House / flat, street and area" className="input" defaultValue={lastDetails?.address} /></label><Field label="Landmark" name="landmark" placeholder="Near metro station" /><Field label="Pincode" name="pincode" inputMode="numeric" pattern="[1-9][0-9]{5}" placeholder="600032" required defaultValue={lastDetails?.pincode} /></div>
       <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
       <SectionTitle number="03" title="Payment" /><div className={`grid gap-3 ${methods.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{methods.map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
       {error && <p className="mt-6 rounded-xl border border-krust/30 bg-blush p-4 text-xs font-semibold text-krust-deep">{error}</p>}
@@ -693,4 +693,8 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
 }
 
 function SectionTitle({ number, title }: { number: string; title: string }) { return <div className="mb-4 mt-9 flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-krust text-[11px] font-bold text-white">{number}</span><h3 className="text-2xl">{title}</h3></div>; }
+/** Indian mobile number: digits only, at most 10 (a pasted +91 prefix is dropped). */
+const tenDigits = (value?: string) => { const d = (value ?? "").replace(/D/g, ""); return (d.length > 10 && d.startsWith("91") ? d.slice(2) : d).slice(0, 10); };
+const MOBILE_INPUT = { type: "tel", inputMode: "numeric", maxLength: 10, pattern: "[6-9][0-9]{9}", title: "Enter a 10-digit mobile number", onInput: (e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = tenDigits(e.currentTarget.value); } } as const;
+
 function Field({ label, ...inputProps }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) { return <label><span className="label">{label}</span><input {...inputProps} className="input" /></label>; }

@@ -122,7 +122,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
         <div className="mx-auto flex h-[78px] max-w-[1440px] items-center justify-between px-5 lg:px-10">
           <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${branding.storeName} home`}>
             <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-2xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)]" />
-            <div><img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" /><p className="hidden whitespace-nowrap text-[9px] font-semibold uppercase tracking-[.3em] text-cocoa sm:block">{branding.tagline}</p></div>
+            <img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" />
           </Link>
           <nav className="hidden items-center gap-6 whitespace-nowrap text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa xl:flex 2xl:gap-8">
             {NAV.map(([href, label]) => <a key={href} href={href} className={`relative transition hover:text-krust after:absolute after:-bottom-1 after:left-0 after:h-px after:bg-krust after:transition-all hover:after:w-full ${isActive(href) ? "text-krust after:w-full" : "after:w-0"}`}>{label}</a>)}

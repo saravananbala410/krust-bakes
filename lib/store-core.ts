@@ -19,7 +19,7 @@ export const ROLE_LABELS: Record<AdminRole, string> = { DEV_ADMIN: "Dev admin", 
 export type AdminTab = "Overview" | "Orders" | "Recycle bin" | "Products" | "Categories" | "Hampers" | "GST" | "Customers & payments" | "Content studio" | "Social links" | "Settings" | "Admin users" | "History" | "Visitors";
 export const ROLE_TABS: Record<AdminRole, AdminTab[]> = {
   DEV_ADMIN: ["Overview", "Visitors", "Orders", "Recycle bin", "Products", "Categories", "Hampers", "GST", "Customers & payments", "Content studio", "Social links", "Settings", "Admin users", "History"],
-  SUPER_ADMIN: ["Overview", "Orders", "Hampers", "GST", "Customers & payments", "Settings", "History"],
+  SUPER_ADMIN: ["Overview", "Orders", "Products", "Hampers", "GST", "Customers & payments", "Settings", "History"],
   SALES_ADMIN: ["Orders", "Customers & payments"],
 };
 export type AdminUser = { id: string; name: string; username: string; role: AdminRole; active: boolean; createdAt?: string };

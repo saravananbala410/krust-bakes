@@ -302,7 +302,7 @@ function upsert<T extends { id: string }>(list: T[], item: T) {
 function permittedRoles(action: AdminAction): AdminRole[] {
   switch (action.type) {
     case "order.update": case "admin.changeOwnPassword": case "admin.updateOwnProfile": return ["DEV_ADMIN", "SUPER_ADMIN", "SALES_ADMIN"];
-    case "order.recycle": case "settings.update": case "hamper.save": case "hamper.delete": case "festive.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
+    case "order.recycle": case "product.save": case "settings.update": case "hamper.save": case "hamper.delete": case "festive.update": return ["DEV_ADMIN", "SUPER_ADMIN"];
     default: return ["DEV_ADMIN"];
   }
 }

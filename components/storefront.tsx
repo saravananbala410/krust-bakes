@@ -694,7 +694,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
 
 function SectionTitle({ number, title }: { number: string; title: string }) { return <div className="mb-4 mt-9 flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-krust text-[11px] font-bold text-white">{number}</span><h3 className="text-2xl">{title}</h3></div>; }
 /** Indian mobile number: digits only, at most 10 (a pasted +91 prefix is dropped). */
-const tenDigits = (value?: string) => { const d = (value ?? "").replace(/D/g, ""); return (d.length > 10 && d.startsWith("91") ? d.slice(2) : d).slice(0, 10); };
+const tenDigits = (value?: string) => { const d = (value ?? "").replace(/\D/g, ""); return (d.length > 10 && d.startsWith("91") ? d.slice(2) : d).slice(0, 10); };
 const MOBILE_INPUT = { type: "tel", inputMode: "numeric", maxLength: 10, pattern: "[6-9][0-9]{9}", title: "Enter a 10-digit mobile number", onInput: (e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = tenDigits(e.currentTarget.value); } } as const;
 
 function Field({ label, ...inputProps }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) { return <label><span className="label">{label}</span><input {...inputProps} className="input" /></label>; }

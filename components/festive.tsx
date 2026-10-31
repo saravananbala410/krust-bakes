@@ -95,7 +95,7 @@ function HamperCard({ hamper, onOpen }: { hamper: Hamper; onOpen: () => void }) 
         {hamper.badge && <span className="badge pointer-events-none absolute left-2 top-2 max-w-[calc(100%-1rem)] gap-1 whitespace-nowrap bg-krust !px-2 !py-1 !text-[8px] !tracking-[.08em] text-white sm:left-3 sm:top-3 sm:!px-[.7rem] sm:!text-[10px]"><Sparkles size={9} className="shrink-0" /><span className="truncate">{hamper.badge}</span></span>}
       </div>
       <div className="flex flex-1 flex-col p-4">
-        <p className="font-display text-lg leading-tight">{hamper.name}</p>
+        <p className="font-display text-lg leading-tight text-ink">{hamper.name}</p>
         <p className="mt-1 text-[11px] font-semibold text-cocoa">{hamper.contents.length} treats inside</p>
         <div className="mt-auto flex items-center justify-between pt-3"><span className="font-display text-xl font-extrabold text-krust">{formatInr(hamper.price)}</span><span className="text-[11px] font-extrabold uppercase tracking-wider text-krust">View →</span></div>
       </div>

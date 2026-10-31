@@ -443,8 +443,8 @@ function Hero() {
           <div className="reveal relative aspect-[4/5] overflow-hidden rounded-t-[999px] rounded-b-[40px] border-[6px] border-krust bg-peach shadow-[0_40px_90px_-30px_rgba(176,20,24,.55)]" style={{ animationDelay: "120ms" }}>
             <img src={branding.heroImage || HERO} alt="Freshly baked artisan breads and pastries" className="ken-burns h-full w-full object-cover" />
           </div>
-          <div className="soft-float absolute -left-3 top-16 rounded-2xl border-2 border-krust bg-white px-4 py-3 shadow-xl sm:-left-10"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cocoa">Baker&apos;s note</p><p className="font-display text-lg italic">“Patience is an ingredient.”</p></div>
-          <div className="soft-float absolute -right-2 bottom-14 grid h-28 w-28 place-items-center rounded-full bg-krust text-center text-white shadow-xl sm:-right-6" style={{ animationDelay: "1.5s" }}><div><p className="font-display text-3xl leading-none">100%</p><p className="mt-1 text-[9px] font-bold uppercase tracking-[.16em]">Baked<br />fresh</p></div></div>
+          <div className="soft-float absolute left-2 top-3 rounded-xl border-2 border-krust bg-white px-3 py-2 shadow-xl sm:-left-10 sm:top-16 sm:rounded-2xl sm:px-4 sm:py-3"><p className="text-[8px] font-bold uppercase tracking-[.18em] text-cocoa sm:text-[10px]">Baker&apos;s note</p><p className="font-display text-sm italic sm:text-lg">“Patience is an ingredient.”</p></div>
+          <div className="soft-float absolute -right-1 bottom-6 grid h-20 w-20 place-items-center rounded-full bg-krust text-center text-white shadow-xl sm:-right-6 sm:bottom-14 sm:h-28 sm:w-28" style={{ animationDelay: "1.5s" }}><div><p className="font-display text-2xl leading-none sm:text-3xl">100%</p><p className="mt-1 text-[7px] sm:text-[9px] font-bold uppercase tracking-[.16em]">Baked<br />fresh</p></div></div>
         </div>
       </div>
     </section>

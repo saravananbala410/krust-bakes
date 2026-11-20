@@ -145,7 +145,7 @@ textarea.input { height: auto; padding-top: .7rem; padding-bottom: .7rem; }
 .slide-copy { animation: slide-in-right .9s .12s cubic-bezier(.2,.8,.2,1) both; }
 .pulse-ring { animation: pulse-ring 1.8s ease-out infinite; }
 .marquee-track { width: max-content; animation: marquee 30s linear infinite; }
-.shimmer-text { background: linear-gradient(90deg, var(--krust-red) 20%, #f19aa6 40%, var(--krust-red) 60%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; }
+.shimmer-text { background: linear-gradient(90deg, var(--krust-red) 20%, color-mix(in srgb, var(--krust-red) 45%, #fff) 40%, var(--krust-red) 60%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 6s linear infinite; }
 .slide-progress { transform-origin: left; animation: progress var(--slide-ms, 6000ms) linear both; }
 
 /* Scroll reveal: elements with [data-reveal] animate in when they enter the viewport. */
@@ -170,3 +170,78 @@ textarea.input { height: auto; padding-top: .7rem; padding-bottom: .7rem; }
 .diya-glow { animation: glow-pulse 2.2s ease-in-out infinite; }
 .tap-sparkle { position: fixed; z-index: 90; pointer-events: none; width: 10px; height: 10px; animation: sparkle-pop .75s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .tap-sparkle { display: none; } }
+
+/* Festival themes: colours come from --fest-* variables set on the storefront root (lib/festive-themes.ts). */
+:root { --fest-from: #ec2427; --fest-via: #c81c22; --fest-to: #8f1218; --fest-gold: #f5c542; }
+.festive-banner { background-image: linear-gradient(to bottom right, var(--fest-from), var(--fest-via), var(--fest-to)); }
+@keyframes ornament-sway { 0%, 100% { transform: rotate(-6deg) translateY(0); } 50% { transform: rotate(6deg) translateY(-2px); } }
+.ornament { transform-origin: 50% 0; animation: ornament-sway 2.6s ease-in-out infinite; filter: drop-shadow(0 2px 3px rgb(0 0 0 / .15)); }
+
+/* Festival scenes (components/festive-scenes.tsx) */
+@keyframes fly-across { 0% { transform: translateX(-110%); } 42% { transform: translateX(105vw); } 100% { transform: translateX(105vw); } }
+@keyframes walk-across { 0% { transform: translateX(-110%); } 70% { transform: translateX(105vw); } 100% { transform: translateX(105vw); } }
+@keyframes sleigh-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-16px) rotate(2deg); } }
+@keyframes gallop { 0%, 100% { transform: rotate(28deg); } 50% { transform: rotate(-28deg); } }
+@keyframes walk-leg { 0%, 100% { transform: rotate(12deg); } 50% { transform: rotate(-12deg); } }
+@keyframes tail-swish { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(14deg); } }
+@keyframes cow-nod { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(4deg); } }
+@keyframes nose-glow { 0%, 100% { filter: drop-shadow(0 0 2px #ff2a2a); } 50% { filter: drop-shadow(0 0 7px #ff2a2a); } }
+@keyframes lantern-swing { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+@keyframes moon-glow { 0%, 100% { filter: drop-shadow(0 0 8px rgb(242 193 78 / .55)); transform: rotate(-4deg); } 50% { filter: drop-shadow(0 0 18px rgb(242 193 78 / .9)); transform: rotate(4deg); } }
+@keyframes gulal { 0% { transform: translate(-50%, -50%) scale(.15); opacity: 0; } 18% { opacity: .5; } 100% { transform: translate(-50%, -50%) scale(1.7); opacity: 0; } }
+@keyframes balloon-rise { 0% { transform: translateY(110%); opacity: 0; } 8% { opacity: .95; } 85% { opacity: .95; } 100% { transform: translateY(-115vh); opacity: 0; } }
+@keyframes balloon-sway { 0%, 100% { transform: translateX(-10px) rotate(-5deg); } 50% { transform: translateX(10px) rotate(5deg); } }
+@keyframes ribbon-shine { 0% { transform: translateX(-100%); } 60%, 100% { transform: translateX(250%); } }
+.fly-across { animation: fly-across 26s linear 2s infinite both; }
+.walk-across { animation: walk-across 38s linear 1.5s infinite both; }
+.sleigh-bob { animation: sleigh-bob 2.4s ease-in-out infinite; }
+.gallop-a, .gallop-b, .walk-a, .walk-b, .tail-swish, .cow-nod { transform-box: fill-box; }
+.gallop-a, .gallop-b { transform-origin: 50% 0; animation: gallop .5s ease-in-out infinite; }
+.gallop-b { animation-delay: -.25s; }
+.walk-a, .walk-b { transform-origin: 50% 0; animation: walk-leg 1s ease-in-out infinite; }
+.walk-b { animation-delay: -.5s; }
+.tail-swish { transform-origin: 50% 0; animation: tail-swish 1.4s ease-in-out infinite; }
+.cow-nod { transform-origin: 0% 50%; animation: cow-nod 1s ease-in-out infinite; }
+.rudolph-nose { animation: nose-glow 1s ease-in-out infinite; }
+.lantern-swing { transform-origin: 50% 0; animation: lantern-swing 3.2s ease-in-out infinite; filter: drop-shadow(0 6px 6px rgb(0 0 0 / .15)); }
+.moon-glow { animation: moon-glow 5s ease-in-out infinite; }
+.gulal { animation: gulal 3.2s ease-out forwards; filter: blur(6px); mix-blend-mode: multiply; }
+.balloon-rise { animation: balloon-rise 18s linear infinite both; }
+.balloon-sway { animation: balloon-sway 3.5s ease-in-out infinite; }
+.festive-ribbon::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(100deg, transparent, rgb(255 255 255 / .35), transparent); animation: ribbon-shine 4.5s ease-in-out infinite; }
+
+/* Festival page backgrounds: a faint pattern behind the content. */
+main[data-festive="christmas"] { background-image: radial-gradient(circle at 20px 20px, rgb(200 16 46 / .07) 0 2px, transparent 3px), radial-gradient(circle at 60px 60px, rgb(31 107 58 / .08) 0 2.5px, transparent 3.5px); background-size: 80px 80px; }
+main[data-festive="pongal"] { background-image: radial-gradient(circle, rgb(217 86 26 / .12) 1.6px, transparent 2.2px), radial-gradient(circle at 50% 50%, transparent 14px, rgb(217 165 32 / .10) 15px, transparent 16px); background-size: 22px 22px, 44px 44px; }
+main[data-festive="diwali"] { background-image: radial-gradient(circle at 30px 30px, rgb(245 197 66 / .14) 0 2px, transparent 3px); background-size: 60px 60px; }
+main[data-festive="holi"] { background-image: radial-gradient(circle at 10% 20%, rgb(255 61 127 / .07), transparent 25%), radial-gradient(circle at 85% 35%, rgb(58 134 255 / .07), transparent 25%), radial-gradient(circle at 40% 80%, rgb(61 220 151 / .07), transparent 25%), radial-gradient(circle at 75% 85%, rgb(255 210 63 / .08), transparent 25%); background-attachment: fixed; }
+main[data-festive="eid"] { background-image: radial-gradient(circle at 25px 25px, rgb(201 161 59 / .14) 0 1.6px, transparent 2.4px), radial-gradient(circle at 75px 75px, rgb(15 122 100 / .08) 0 2px, transparent 3px); background-size: 100px 100px; }
+main[data-festive="newyear"] { background-image: radial-gradient(circle at 20px 30px, rgb(212 167 44 / .16) 0 1.5px, transparent 2.2px), radial-gradient(circle at 70px 80px, rgb(75 51 201 / .08) 0 2px, transparent 3px); background-size: 90px 90px; }
+main[data-festive="valentines"] { background-image: radial-gradient(circle at 25px 25px, rgb(224 36 94 / .08) 0 3px, transparent 4px); background-size: 70px 70px; }
+
+/* Festival intro (components/festive-intro.tsx): plays on the first scroll, then the page scrolls. */
+@keyframes intro-veil { 0% { opacity: 0; } 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes intro-greet { 0% { opacity: 0; transform: translate(-50%, -20px) scale(.8); } 15%, 80% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -10px) scale(.95); } }
+@keyframes intro-sleigh { 0% { transform: translate(-105%, 18vh) rotate(6deg); } 100% { transform: translate(110vw, -38vh) rotate(-10deg); } }
+@keyframes intro-trot { 0% { transform: translateX(-105%); } 100% { transform: translateX(105vw); } }
+@keyframes intro-rise { 0% { opacity: 0; transform: translateY(40px) scale(.9); } 15%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes intro-float { 0% { opacity: 0; transform: translateY(10vh); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-105vh); } }
+@keyframes trot { 0%, 100% { transform: rotate(20deg); } 50% { transform: rotate(-20deg); } }
+@keyframes bull-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes steam { 0% { opacity: 0; transform: translateY(6px); } 40% { opacity: .8; } 100% { opacity: 0; transform: translateY(-12px); } }
+@keyframes boil { 0%, 100% { transform: scale(.7); } 50% { transform: scale(1.15); } }
+.intro-veil { background: radial-gradient(ellipse at 50% 40%, rgb(255 255 255 / .0), rgb(20 12 8 / .28)); animation: intro-veil var(--intro-ms, 3.4s) ease both; }
+main[data-festive="christmas"] .intro-veil { background: linear-gradient(#0e2a4a 0%, #1d4d7a 60%, #3a6f9e 100%); opacity: .9; }
+main[data-festive="pongal"] .intro-veil { background: linear-gradient(#ffcf7a 0%, #ffe9b8 55%, #fff4d6 100%); }
+.intro-greet { animation: intro-greet 3.2s ease both; }
+.intro-sleigh { animation: intro-sleigh 3.4s cubic-bezier(.35,.1,.45,1) both; }
+.intro-trot { animation: intro-trot 4s linear both; }
+.intro-rise { animation: intro-rise 3.6s ease both; }
+.intro-float { animation: intro-float 2.8s ease-in both; }
+.intro-moon, .intro-sun { animation: intro-rise 3.6s ease both; }
+.intro-ground { background: radial-gradient(circle, rgb(255 255 255 / .55) 1.6px, transparent 2.4px) 0 0 / 22px 22px, linear-gradient(#c9813f, #a8622a); border-top: 6px solid #e0a800; }
+.trot-a, .trot-b { transform-box: fill-box; transform-origin: 50% 0; animation: trot .42s ease-in-out infinite; }
+.trot-b { animation-delay: -.21s; }
+.bull-bob { animation: bull-bob .42s ease-in-out infinite; }
+.steam path { animation: steam 2s ease-out infinite; }
+.boil { transform-box: fill-box; transform-origin: center; animation: boil 1.2s ease-in-out infinite; }

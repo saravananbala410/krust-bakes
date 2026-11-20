@@ -10,6 +10,7 @@ import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRol
 import type { Product, Variant } from "@/lib/types";
 import { downloadXlsx } from "@/lib/xlsx";
 import { socialIcons, socialLabels } from "./social-icons";
+import { FESTIVE_THEME_IDS, FESTIVE_THEMES, themeOf } from "@/lib/festive-themes";
 
 type Tab = AdminTab;
 const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Visitors", Eye], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["Hampers", Gift], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
@@ -547,7 +548,7 @@ function Hampers() {
   const [editing, setEditing] = useState<Hamper | null>(null);
   const blank = (): Hamper => ({ id: "", name: "", description: "", imageUrl: "/brand/krust-hero.png", price: 0, gstRate: settings.gstRates.includes(5) ? 5 : settings.gstRates[0] ?? 0, contents: [], badge: "", active: true });
   return <div className="space-y-6">
-    <Header title="Festive hampers" copy="Gift hampers shown in the Diwali popup and on the shop. Customers open one to see what's inside and add it to their basket." action={<button onClick={() => setEditing(blank())} className="action"><Plus size={15} /> Add hamper</button>} />
+    <Header title="Festive hampers" copy="Festival theme for the whole site, plus gift hampers shown in the festive popup and on the shop. Customers open one to see what's inside and add it to their basket." action={<button onClick={() => setEditing(blank())} className="action"><Plus size={15} /> Add hamper</button>} />
     <FestiveSettings festive={festive} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{hampers.map((h) => <article key={h.id} className={`lift overflow-hidden rounded-2xl border-2 border-[#f5c542]/60 bg-white ${h.active ? "" : "opacity-60"}`}>
       <div className="relative h-40 bg-peach"><img src={h.imageUrl} alt="" className="h-full w-full object-cover" />{h.badge && <span className="badge absolute left-3 top-3 bg-krust text-white">{h.badge}</span>}<span className={`badge absolute right-3 top-3 ${h.active ? "bg-mint text-[#2f7a4a]" : "bg-[#eee] text-[#777]"}`}>{h.active ? "Live" : "Hidden"}</span></div>
@@ -565,9 +566,18 @@ function Hampers() {
 function FestiveSettings({ festive }: { festive: Festive }) {
   const run = useDispatch();
   const [f, setF] = useState(festive);
-  return <Panel title="Festive popup & fireworks">
+  return <Panel title="Festival theme, popup & animation">
     <form onSubmit={(e) => { e.preventDefault(); void run({ type: "festive.update", festive: f }, "Festive settings saved"); }} className="space-y-4">
-      <div className="flex flex-wrap gap-6 rounded-xl bg-cream p-4"><Toggle label="Show hamper popup & section" checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} /><Toggle label="Fireworks animation" checked={f.fireworks} onChange={(v) => setF({ ...f, fireworks: v })} /></div>
+      <div><span className="label">Festival theme (changes the whole storefront)</span>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{FESTIVE_THEME_IDS.map((id) => { const t = FESTIVE_THEMES[id]; const on = (f.theme ?? "diwali") === id; return <button type="button" key={id} aria-pressed={on} onClick={() => { const prev = themeOf(f.theme); setF({ ...f, theme: id, title: !f.title || f.title === prev.defaultTitle ? t.defaultTitle : f.title, subtitle: !f.subtitle || f.subtitle === prev.defaultSubtitle ? t.defaultSubtitle : f.subtitle }); }} className={`relative overflow-hidden rounded-xl border-2 p-3 text-left transition ${on ? "border-krust shadow-[0_8px_20px_-8px_rgba(236,36,39,.45)]" : "border-petal bg-white hover:border-krust/50"}`}>
+          <span className="block h-2 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${t.from}, ${t.via}, ${t.gold})` }} />
+          <span className="mt-2 flex items-center gap-2 text-sm font-extrabold"><span className="text-lg">{t.emoji}</span>{t.label}</span>
+          <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-cocoa">{id === "none" ? "Plain site" : t.effect}</span>
+          {on && <span className="absolute right-2 top-3 badge bg-krust text-white">On</span>}
+        </button>; })}</div>
+        <p className="mt-2 text-[11px] text-cocoa">Pick a festival and press Save. The garland, colours, gift button and animation on the shop switch to that festival. Choose &quot;No theme&quot; to turn festive decoration off.</p>
+      </div>
+      <div className="flex flex-wrap gap-6 rounded-xl bg-cream p-4"><Toggle label="Show hamper popup & section" checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} /><Toggle label={`Theme animation (${themeOf(f.theme).effect})`} checked={f.fireworks} onChange={(v) => setF({ ...f, fireworks: v })} /></div>
       <div className="grid gap-4 sm:grid-cols-2"><Field label="Popup heading" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /><Field label="Popup message" value={f.subtitle} onChange={(e) => setF({ ...f, subtitle: e.target.value })} /><Field label="Show popup after (seconds)" type="number" min={0} max={60} value={f.popupDelaySeconds} onChange={(e) => setF({ ...f, popupDelaySeconds: Number(e.target.value) })} /><Field label="Show again after closing (minutes)" type="number" min={1} max={1440} value={f.repeatMinutes} onChange={(e) => setF({ ...f, repeatMinutes: Number(e.target.value) })} /></div>
       <button className="action"><Sparkles size={15} /> Save festive settings</button>
     </form>

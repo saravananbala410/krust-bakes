@@ -8,6 +8,9 @@ import { formatInr } from "@/lib/gst";
 import { galleryOf, HAMPER_VARIANT, hamperProductId, type Festive, type Hamper } from "@/lib/store-core";
 import { useBackClose } from "@/lib/use-back-close";
 import { PhotoCarousel } from "./photo-carousel";
+import { type FestiveTheme, themeOf } from "@/lib/festive-themes";
+import { FestiveScene } from "./festive-scenes";
+import { ScrollIntro } from "./festive-intro";
 
 // ---------- Fireworks ----------
 
@@ -16,7 +19,7 @@ type Rocket = { x: number; y: number; vy: number; targetY: number; color: string
 const COLORS = ["#EC2427", "#FFD45C", "#FFFFFF", "#FF8A3D", "#FFB3C1", "#F5C542"];
 
 /** Full-screen canvas of bursting crackers. Each change of `burst` launches a new volley. */
-export function Fireworks({ burst, seconds = 2.5 }: { burst: number; seconds?: number }) {
+export function Fireworks({ burst, seconds = 2.5, colors = COLORS }: { burst: number; seconds?: number; colors?: string[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!burst) return;
@@ -33,7 +36,7 @@ export function Fireworks({ burst, seconds = 2.5 }: { burst: number; seconds?: n
     const end = performance.now() + seconds * 1000;
     let nextLaunch = 0;
     let frame = 0;
-    const launch = () => rockets.push({ x: innerWidth * (0.12 + Math.random() * 0.76), y: innerHeight, vy: -(innerHeight / 55 + Math.random() * 4), targetY: innerHeight * (0.12 + Math.random() * 0.35), color: COLORS[Math.floor(Math.random() * COLORS.length)] });
+    const launch = () => rockets.push({ x: innerWidth * (0.12 + Math.random() * 0.76), y: innerHeight, vy: -(innerHeight / 55 + Math.random() * 4), targetY: innerHeight * (0.12 + Math.random() * 0.35), color: colors[Math.floor(Math.random() * colors.length)] });
     const explode = (r: Rocket) => {
       const count = 34 + Math.floor(Math.random() * 18);
       const speed = 2 + Math.random() * 2;
@@ -69,7 +72,7 @@ export function Fireworks({ burst, seconds = 2.5 }: { burst: number; seconds?: n
     };
     frame = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(frame); removeEventListener("resize", resize); ctx.clearRect(0, 0, innerWidth, innerHeight); };
-  }, [burst, seconds]);
+  }, [burst, seconds, colors]);
   return <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none fixed inset-0 z-[80] h-full w-full" />;
 }
 
@@ -89,7 +92,7 @@ function useAddHamper(onAdded?: () => void) {
 
 function HamperCard({ hamper, onOpen }: { hamper: Hamper; onOpen: () => void }) {
   return (
-    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="lift group flex h-full cursor-pointer flex-col overflow-hidden rounded-[22px] border-2 border-[#f5c542]/60 bg-white text-left">
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} className="lift group flex h-full cursor-pointer flex-col overflow-hidden rounded-[22px] border-2 border-(--fest-gold)/60 bg-white text-left">
       <div className="relative h-36 sm:h-44">
         <PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={3200} className="h-full [&>div]:h-full" rounded="rounded-none" />
         {hamper.badge && <span className="badge pointer-events-none absolute left-2 top-2 max-w-[calc(100%-1rem)] gap-1 whitespace-nowrap bg-krust !px-2 !py-1 !text-[8px] !tracking-[.08em] text-white sm:left-3 sm:top-3 sm:!px-[.7rem] sm:!text-[10px]"><Sparkles size={9} className="shrink-0" /><span className="truncate">{hamper.badge}</span></span>}
@@ -108,7 +111,7 @@ function HamperDetail({ hamper, onBack, onAdded }: { hamper: Hamper; onBack?: ()
   const add = useAddHamper(onAdded);
   return (
     <div className="fade-in grid gap-6 md:grid-cols-[1fr_1.05fr]">
-      <div className="relative"><PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={4000} thumbnails className="[&>div:first-child]:aspect-square [&>div:first-child]:border-2 [&>div:first-child]:border-[#f5c542]/60" />{hamper.badge && <span className="badge pointer-events-none absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}</div>
+      <div className="relative"><PhotoCarousel photos={galleryOf(hamper)} alt={hamper.name} autoPlayMs={4000} thumbnails className="[&>div:first-child]:aspect-square [&>div:first-child]:border-2 [&>div:first-child]:border-(--fest-gold)/60" />{hamper.badge && <span className="badge pointer-events-none absolute left-3 top-3 bg-krust text-white"><Sparkles size={10} /> {hamper.badge}</span>}</div>
       <div>
         {onBack && <button onClick={onBack} className="mb-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-cocoa hover:text-krust"><ArrowLeft size={13} /> All hampers</button>}
         <h3 className="text-3xl leading-tight">{hamper.name}</h3>
@@ -130,15 +133,15 @@ export function HamperPopup({ festive, hampers, onClose, onAdded }: { festive: F
   useEffect(() => { const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose(); addEventListener("keydown", esc); return () => removeEventListener("keydown", esc); }, [onClose]);
   useBackClose(true, onClose);
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-ink/55 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={festive.title}>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-ink/55 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={festive.title || themeOf(festive.theme).defaultTitle}>
       <button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="Close" />
-      <div className="reveal relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[30px] border-[3px] border-[#f5c542] bg-cream shadow-[0_40px_100px_-30px_rgba(0,0,0,.6)]">
-        <div className="sticky top-0 z-20 flex h-0 justify-end"><button onClick={onClose} aria-label="Close" className="mr-3 mt-3 flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 text-sm font-extrabold text-ink shadow-lg ring-2 ring-[#f5c542] transition hover:bg-blush sm:h-12"><X size={20} strokeWidth={2.6} /> Close</button></div>
-        <div className="relative overflow-hidden bg-gradient-to-br from-krust via-[#c81c22] to-[#8f1218] px-6 py-7 text-white sm:px-9">
-          <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 15% 30%, #ffd45c 0 2px, transparent 3px), radial-gradient(circle at 80% 20%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 60% 80%, #ffd45c 0 2px, transparent 3px), radial-gradient(circle at 35% 75%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "120px 90px" }} />
-          <p className="relative flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-[#ffd45c]"><Gift size={14} /> Festive hampers</p>
-          <h2 className="relative mt-2 text-4xl leading-tight sm:text-5xl">{festive.title}</h2>
-          <p className="relative mt-2 max-w-xl text-sm text-white/85">{festive.subtitle}</p>
+      <div className="reveal relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[30px] border-[3px] border-(--fest-gold) bg-cream shadow-[0_40px_100px_-30px_rgba(0,0,0,.6)]">
+        <div className="sticky top-0 z-20 flex h-0 justify-end"><button onClick={onClose} aria-label="Close" className="mr-3 mt-3 flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 text-sm font-extrabold text-ink shadow-lg ring-2 ring-(--fest-gold) transition hover:bg-blush sm:h-12"><X size={20} strokeWidth={2.6} /> Close</button></div>
+        <div className="relative overflow-hidden festive-banner px-6 py-7 text-white sm:px-9">
+          <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 15% 30%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 80% 20%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 60% 80%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 35% 75%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "120px 90px" }} />
+          <p className="relative flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> Festive hampers</p>
+          <h2 className="relative mt-2 text-4xl leading-tight sm:text-5xl">{festive.title || themeOf(festive.theme).defaultTitle}</h2>
+          <p className="relative mt-2 max-w-xl text-sm text-white/85">{festive.subtitle || themeOf(festive.theme).defaultSubtitle}</p>
         </div>
         <div className="p-5 sm:p-8">
           {selected ? <HamperDetail hamper={selected} onBack={hampers.length > 1 ? () => setSelected(null) : undefined} onAdded={onAdded} />
@@ -154,10 +157,10 @@ export function HamperPopup({ festive, hampers, onClose, onAdded }: { festive: F
 export function HamperSection({ festive, hampers, onOpen }: { festive: Festive; hampers: Hamper[]; onOpen: (h: Hamper) => void }) {
   return (
     <section id="hampers" className="mx-auto max-w-[1440px] px-5 pt-20 lg:px-10 lg:pt-24">
-      <div className="relative overflow-hidden rounded-[32px] border-[3px] border-[#f5c542] bg-gradient-to-br from-krust via-[#c81c22] to-[#8f1218] p-6 text-white sm:p-10">
-        <div className="pointer-events-none absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 20% 30%, #ffd45c 0 2px, transparent 3px), radial-gradient(circle at 75% 25%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "110px 80px" }} />
+      <div className="relative overflow-hidden rounded-[32px] border-[3px] border-(--fest-gold) festive-banner p-6 text-white sm:p-10">
+        <div className="pointer-events-none absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 20% 30%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 75% 25%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "110px 80px" }} />
         <div className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div><p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-[#ffd45c]"><Gift size={14} /> Festive hampers</p><h2 className="mt-2 text-4xl sm:text-5xl">{festive.title}</h2><p className="mt-2 max-w-xl text-sm text-white/85">{festive.subtitle}</p></div>
+          <div><p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> Festive hampers</p><h2 className="mt-2 text-4xl sm:text-5xl">{festive.title || themeOf(festive.theme).defaultTitle}</h2><p className="mt-2 max-w-xl text-sm text-white/85">{festive.subtitle || themeOf(festive.theme).defaultSubtitle}</p></div>
         </div>
         <div className="relative mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">{hampers.map((h) => <HamperCard key={h.id} hamper={h} onOpen={() => onOpen(h)} />)}</div>
       </div>
@@ -167,15 +170,22 @@ export function HamperSection({ festive, hampers, onOpen }: { festive: Festive; 
 
 const SEEN_KEY = "krust-hamper-popup-seen";
 
-/** Wires the festive pieces: timed popup that returns after `repeatMinutes`, floating gift button, fireworks. */
+/**
+ * Wires the festive pieces. The theme (Diwali, Christmas, …) drives the decoration and animation;
+ * `festive.enabled` drives only the hamper popup, section and floating gift button.
+ */
 export function FestiveLayer({ festive, hampers, open, setOpen, focus, setFocus, raised }: { festive: Festive; hampers: Hamper[]; open: boolean; setOpen: (v: boolean) => void; focus: Hamper | null; setFocus: (h: Hamper | null) => void; raised: boolean }) {
+  const theme = themeOf(festive.theme);
+  const themed = theme.id !== "none";
   const [burst, setBurst] = useState(0);
   const live = festive.enabled && hampers.length > 0;
-  const celebrate = useCallback(() => { if (festive.fireworks) setBurst((b) => b + 1); }, [festive.fireworks]);
-  useTapSparkles(live && festive.fireworks);
+  const animate = themed && festive.fireworks;
+  const crackers = animate && theme.effect === "fireworks";
+  const celebrate = useCallback(() => { if (crackers) setBurst((b) => b + 1); }, [crackers]);
+  useTapSparkles(animate, theme.colors);
 
-  // Fireworks on first visit to the page.
-  useEffect(() => { if (live && festive.fireworks) { const t = setTimeout(() => setBurst(1), 600); return () => clearTimeout(t); } }, [live, festive.fireworks]);
+  // A volley of crackers on first visit to the page.
+  useEffect(() => { if (crackers) { const t = setTimeout(() => setBurst(1), 600); return () => clearTimeout(t); } }, [crackers]);
 
   // Popup after the delay, then again every repeatMinutes after it is closed.
   useEffect(() => {
@@ -183,17 +193,25 @@ export function FestiveLayer({ festive, hampers, open, setOpen, focus, setFocus,
     let lastSeen = 0;
     try { lastSeen = Number(sessionStorage.getItem(SEEN_KEY) || 0); } catch { /* storage blocked */ }
     const due = lastSeen ? lastSeen + festive.repeatMinutes * 60_000 : Date.now() + festive.popupDelaySeconds * 1000;
-    const t = setTimeout(() => { setFocus(null); setOpen(true); }, Math.max(festive.popupDelaySeconds * 1000, due - Date.now()));
+    let t = 0;
+    // Wait for the scroll intro to finish before popping up over it.
+    const show = () => { if (document.documentElement.dataset.festiveIntro === "playing") { t = window.setTimeout(show, 1000); return; } setFocus(null); setOpen(true); };
+    t = window.setTimeout(show, Math.max(festive.popupDelaySeconds * 1000, due - Date.now()));
     return () => clearTimeout(t);
   }, [live, open, festive.repeatMinutes, festive.popupDelaySeconds, setOpen, setFocus]);
 
-  if (!live) return null;
   const close = () => { try { sessionStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* storage blocked */ } setOpen(false); setFocus(null); };
   return <>
-    {festive.fireworks && <Fireworks burst={burst} />}
-    {festive.fireworks && <AmbientFireworks />}
-    <button onClick={() => { setFocus(null); setOpen(true); celebrate(); }} aria-label="Open Diwali hampers" className={`pulse-ring fixed left-4 z-40 flex h-14 ${raised ? "bottom-28" : "bottom-6"} items-center gap-2 rounded-full border-2 border-[#f5c542] bg-krust pl-4 pr-5 text-sm font-extrabold text-white shadow-xl transition-all hover:scale-105 sm:left-6`}><Gift size={20} /> <span className="hidden sm:inline">Diwali hampers</span></button>
-    {open && <HamperPopup key={focus?.id ?? "all"} festive={festive} hampers={focus ? [focus] : hampers} onClose={close} onAdded={() => { celebrate(); close(); }} />}
+    {crackers && <Fireworks burst={burst} colors={theme.colors} />}
+    {crackers && <AmbientFireworks colors={theme.colors} />}
+    {animate && !crackers && <FallingEffect theme={theme} />}
+    {animate && <FestiveScene theme={theme} />}
+    {animate && <ScrollIntro theme={theme} title={festive.title || theme.defaultTitle}>
+      {(theme.id === "diwali" || theme.id === "newyear") && <Fireworks burst={1} seconds={2.4} colors={theme.colors} />}
+      {theme.id === "diwali" && <div className="absolute inset-x-0 bottom-[6vh] flex justify-around px-4">{[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className={`intro-rise ${i % 2 ? "max-sm:hidden" : ""}`} style={{ animationDelay: `${i * 120}ms` }}><Diya size={72} delay={i * 150} /></span>)}</div>}
+    </ScrollIntro>}
+    {live && <button onClick={() => { setFocus(null); setOpen(true); celebrate(); }} aria-label={`Open ${theme.hamperLabel}`} className={`pulse-ring festive-banner fixed left-4 z-40 flex h-14 ${raised ? "bottom-28" : "bottom-6"} items-center gap-2 rounded-full border-2 border-(--fest-gold) pl-4 pr-5 text-sm font-extrabold text-white shadow-xl transition-all hover:scale-105 sm:left-6`}><Gift size={20} /> <span className="hidden sm:inline">{theme.hamperLabel}</span></button>}
+    {live && open && <HamperPopup key={focus?.id ?? "all"} festive={festive} hampers={focus ? [focus] : hampers} onClose={close} onAdded={() => { celebrate(); close(); }} />}
   </>;
 }
 
@@ -219,11 +237,23 @@ export function Diya({ size = 44, delay = 0 }: { size?: number; delay?: number }
 
 const BULB_COLORS = ["#FFD45C", "#EC2427", "#FF8A3D", "#FFFFFF", "#F5C542", "#FF4D6D"];
 
-/** A swag of twinkling string lights with diyas, shown under the header. */
-export function DiwaliGarland() {
+/** The little ornaments hung along the garland for each theme (Diwali uses drawn diyas). */
+const ORNAMENTS: Partial<Record<FestiveTheme["id"], string[]>> = {
+  christmas: ["🎄", "⭐", "🎁", "🔔", "🎅"],
+  newyear: ["🎆", "🥂", "✨", "🎉", "🎇"],
+  pongal: ["🌾", "🍯", "☀️", "🐄", "🌾"],
+  holi: ["🎨", "💧", "🌸", "🎨", "💛"],
+  eid: ["🌙", "⭐", "🏮", "🕌", "🌙"],
+  valentines: ["💝", "🌹", "💖", "🍫", "💕"],
+};
+
+/** A swag of twinkling string lights with themed ornaments, shown under the header. */
+export function FestiveGarland({ theme }: { theme: FestiveTheme }) {
   const bulbs = 36;
+  const colors = theme.id === "diwali" ? BULB_COLORS : theme.colors;
+  const ornaments = ORNAMENTS[theme.id];
   return (
-    <div aria-hidden="true" className="pointer-events-none relative h-16 overflow-hidden bg-gradient-to-b from-[#2b1a14]/[.04] to-transparent">
+    <div aria-hidden="true" className="pointer-events-none relative h-14 overflow-hidden bg-gradient-to-b from-[#2b1a14]/[.04] to-transparent sm:h-16">
       <svg className="absolute inset-x-0 top-0 h-10 w-full" viewBox="0 0 1000 40" preserveAspectRatio="none">
         <path d={`M0 2 ${Array.from({ length: 5 }, (_, i) => `Q ${i * 200 + 100} 34 ${(i + 1) * 200} 2`).join(" ")}`} stroke="#6b5446" strokeOpacity=".45" strokeWidth="1.5" fill="none" vectorEffect="non-scaling-stroke" />
       </svg>
@@ -233,18 +263,21 @@ export function DiwaliGarland() {
         // Rounded so server and browser write identical style strings (avoids hydration warnings).
         const top = Math.round((2 + Math.sin(swag * Math.PI) * 26) * 10) / 10;
         const left = Math.round(t * 10000) / 100;
-        const color = BULB_COLORS[i % BULB_COLORS.length];
-        return <span key={i} suppressHydrationWarning className={`bulb absolute h-2.5 w-2.5 rounded-full ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${left}%`, top: `${top}px`, color, backgroundColor: color, animationDelay: `${(i * 137) % 1600}ms` }} />;
+        const color = colors[i % colors.length];
+        return <span key={i} suppressHydrationWarning className={`bulb absolute h-2.5 w-2.5 rounded-full ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${left}%`, top: `${top}px`, color, backgroundColor: color, boxShadow: color.toUpperCase() === "#FFFFFF" ? "0 0 0 1px rgba(107,84,70,.25)" : undefined, animationDelay: `${(i * 137) % 1600}ms` }} />;
       })}
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 sm:px-16">
-        {[0, 1, 2, 3, 4].map((i) => <span key={i} className={i % 2 ? "max-sm:hidden" : ""}><Diya size={34} delay={i * 220} /></span>)}
+        {[0, 1, 2, 3, 4].map((i) => <span key={i} className={i % 2 ? "max-sm:hidden" : ""}>{ornaments ? <span className="ornament inline-block text-2xl leading-none sm:text-[28px]" style={{ animationDelay: `${i * 260}ms` }}>{ornaments[i % ornaments.length]}</span> : <Diya size={34} delay={i * 220} />}</span>)}
       </div>
     </div>
   );
 }
 
+/** Kept for older imports: the Diwali garland. */
+export function DiwaliGarland() { return <FestiveGarland theme={themeOf("diwali")} />; }
+
 /** Small golden sparkles wherever the customer taps or clicks. */
-export function useTapSparkles(enabled: boolean) {
+export function useTapSparkles(enabled: boolean, colors: string[] = BULB_COLORS) {
   useEffect(() => {
     if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const onDown = (e: PointerEvent) => {
@@ -258,7 +291,7 @@ export function useTapSparkles(enabled: boolean) {
         el.style.top = `${e.clientY}px`;
         el.style.setProperty("--dx", `${Math.cos(angle) * dist}px`);
         el.style.setProperty("--dy", `${Math.sin(angle) * dist}px`);
-        el.style.background = BULB_COLORS[i % BULB_COLORS.length];
+        el.style.background = colors[i % colors.length];
         el.style.clipPath = "polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%)";
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 800);
@@ -266,15 +299,70 @@ export function useTapSparkles(enabled: boolean) {
     };
     addEventListener("pointerdown", onDown);
     return () => removeEventListener("pointerdown", onDown);
-  }, [enabled]);
+  }, [enabled, colors]);
 }
 
 /** A single cracker now and then while the customer browses. */
-export function AmbientFireworks({ everySeconds = 60 }: { everySeconds?: number }) {
+export function AmbientFireworks({ everySeconds = 60, colors }: { everySeconds?: number; colors?: string[] }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, everySeconds * 1000);
     return () => clearInterval(id);
   }, [everySeconds]);
-  return <Fireworks burst={tick} seconds={0.6} />;
+  return <Fireworks burst={tick} seconds={0.6} colors={colors} />;
+}
+
+type Flake = { x: number; y: number; r: number; vy: number; vx: number; spin: number; angle: number; color: string; sway: number };
+
+/** Gentle full-screen particles for non-cracker themes: snow, confetti, petals or floating lanterns. */
+export function FallingEffect({ theme }: { theme: FestiveTheme }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const effect = theme.effect;
+    const colors = theme.colors;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const resize = () => { canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+    resize();
+    addEventListener("resize", resize);
+    // Fewer particles on small screens so phones stay smooth.
+    const count = Math.round(Math.min(70, Math.max(24, innerWidth / 22)) * (effect === "lanterns" ? 0.25 : 1));
+    const rising = effect === "lanterns";
+    const make = (initial: boolean): Flake => ({
+      x: Math.random() * innerWidth,
+      y: initial ? Math.random() * innerHeight : rising ? innerHeight + 30 : -20,
+      r: effect === "snow" ? 1.2 + Math.random() * 2.6 : effect === "lanterns" ? 7 + Math.random() * 6 : 3 + Math.random() * 3,
+      vy: rising ? -(0.25 + Math.random() * 0.4) : effect === "snow" ? 0.35 + Math.random() * 0.8 : 0.6 + Math.random() * 1.1,
+      vx: (Math.random() - 0.5) * 0.4, spin: (Math.random() - 0.5) * 0.08, angle: Math.random() * Math.PI * 2,
+      color: colors[Math.floor(Math.random() * colors.length)], sway: Math.random() * Math.PI * 2,
+    });
+    const flakes = Array.from({ length: count }, () => make(true));
+    let frame = 0;
+    const draw = (f: Flake) => {
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.angle); ctx.fillStyle = f.color;
+      if (effect === "snow") { ctx.globalAlpha = 0.85; ctx.shadowColor = "rgba(120,150,190,.5)"; ctx.shadowBlur = 3; ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2); ctx.fill(); }
+      else if (effect === "confetti") { ctx.globalAlpha = 0.8; ctx.fillRect(-f.r, -f.r / 2.5, f.r * 2, f.r / 1.25); }
+      else if (effect === "petals") { ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.ellipse(0, 0, f.r * 1.3, f.r * 0.65, 0, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.rotate(-f.angle); ctx.globalAlpha = 0.55; ctx.shadowColor = f.color; ctx.shadowBlur = 14; ctx.beginPath(); ctx.ellipse(0, 0, f.r * 0.8, f.r, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    };
+    const tick = () => {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      for (let i = 0; i < flakes.length; i++) {
+        const f = flakes[i];
+        f.sway += 0.015; f.x += f.vx + Math.sin(f.sway) * 0.35; f.y += f.vy; f.angle += f.spin;
+        if ((!rising && f.y > innerHeight + 20) || (rising && f.y < -30) || f.x < -30 || f.x > innerWidth + 30) flakes[i] = make(false);
+        draw(f);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    const onVisibility = () => { cancelAnimationFrame(frame); if (document.visibilityState === "visible") frame = requestAnimationFrame(tick); };
+    document.addEventListener("visibilitychange", onVisibility);
+    frame = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(frame); removeEventListener("resize", resize); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [theme]);
+  return <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none fixed inset-0 z-[35] h-full w-full" />;
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CakeSlice, Coffee, Cookie, Croissant, Gift, Hamburger, Layers, Pizza, Wheat, ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
+import { CakeSlice, Coffee, Cookie, Croissant, Gift, Hamburger, Layers, Pizza, Wheat, ArrowLeft, ArrowRight, Award, Check, ChefHat, ChevronDown, Clock3, Leaf, Mail, MapPin, Menu, Minus, PackageCheck, Phone, Plus, Quote, Search, ShieldCheck, Trash2, ShoppingBag, Sparkles, Star, Truck, UserRound, CreditCard, Download, Loader2, X } from "lucide-react";
 import { createContext, FormEvent, type MouseEvent, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { calculateInclusiveGst, formatInr } from "@/lib/gst";
@@ -12,7 +12,10 @@ import { useCustomerStore } from "@/lib/customer-store";
 import { payOnline } from "@/lib/razorpay-client";
 import { downloadReceiptFor } from "@/lib/receipt-pdf";
 import { galleryOf, sellableCatalog, type CarouselSlide, type Hamper, type PublicConfig } from "@/lib/store-core";
-import { DiwaliGarland, FestiveLayer, HamperSection } from "./festive";
+import { FestiveGarland, FestiveLayer, HamperSection } from "./festive";
+import { themeOf, themeStyle } from "@/lib/festive-themes";
+import { HeaderDecor } from "./festive-scenes";
+import { ChristmasGarland, PongalThoranam } from "./festive-intro";
 import type { Product } from "@/lib/types";
 import { AccountContent, AccountSheet, GoogleButton } from "./customer-account";
 import { PhotoCarousel } from "./photo-carousel";
@@ -111,36 +114,39 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
   const cartItems = mounted ? items : 0;
   useScrollReveal(`${category}|${search}|${config.products.length}|${mounted}`);
 
+  const theme = themeOf(config.festive.theme);
   const pickCategory = (name: string) => { setCategory(name); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); };
   const isActive = (href: string) => (href === "/shop" && page === "shop") || (href === "/our-story" && page === "story") || (href === "/orders" && page === "orders");
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-cream pb-28">
+    <main data-festive={theme.id} style={themeStyle(theme) as React.CSSProperties} className="min-h-screen overflow-x-hidden bg-cream pb-28">
+      {theme.id !== "none" && <div className="festive-banner festive-ribbon relative overflow-hidden px-4 py-1.5 text-center text-[11px] font-extrabold uppercase tracking-[.22em] text-white sm:text-xs"><span className="relative">{theme.emoji} {config.festive.title || theme.defaultTitle} {theme.emoji}</span></div>}
       {branding.announcement && <div className="bg-krust px-4 py-2 text-center text-[11px] font-semibold tracking-[.2em] text-white uppercase">{branding.announcement}</div>}
 
       <header className="sticky top-0 z-40 border-b border-petal/70 bg-cream/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-[78px] max-w-[1440px] items-center justify-between px-5 lg:px-10">
-          <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${branding.storeName} home`}>
-            <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-2xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)]" />
-            <img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[150px] sm:w-[178px]" />
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-[78px] sm:gap-3 sm:px-5 lg:px-10">
+          <Link href="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label={`${branding.storeName} home`}>
+            <img src={branding.logoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)] sm:h-12 sm:w-12 sm:rounded-2xl" />
+            <img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[clamp(84px,28vw,150px)] min-w-0 max-[340px]:hidden sm:w-[178px]" />
           </Link>
           <nav className="hidden items-center gap-6 whitespace-nowrap text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa xl:flex 2xl:gap-8">
             {NAV.map(([href, label]) => <a key={href} href={href} className={`relative transition hover:text-krust after:absolute after:-bottom-1 after:left-0 after:h-px after:bg-krust after:transition-all hover:after:w-full ${isActive(href) ? "text-krust after:w-full" : "after:w-0"}`}>{label}</a>)}
           </nav>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <SocialRow links={socialLinks} className="hidden 2xl:flex" small />
-            <MyOrdersButton />
+            <span className="hidden sm:contents"><MyOrdersButton /></span>
             <AccountButton />
-            <button onClick={() => setCheckoutOpen(true)} className="relative flex h-11 items-center gap-2 rounded-full bg-krust px-5 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
+            <button onClick={() => setCheckoutOpen(true)} aria-label="Open basket" className="relative flex h-10 items-center gap-1.5 rounded-full bg-krust px-3 text-sm sm:h-11 sm:gap-2 sm:px-5 font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
               {cartItems > 0 && <span key={cartItems} className="reveal rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-krust">{cartItems}</span>}
             </button>
-            <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu" className="grid h-11 w-11 place-items-center rounded-full border border-petal bg-white xl:hidden"><Menu size={19} /></button>
+            <button onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-petal bg-white sm:h-11 sm:w-11 xl:hidden">{menuOpen ? <X size={19} /> : <Menu size={19} />}</button>
           </div>
         </div>
-        {menuOpen && <nav className="fade-in border-t border-petal bg-cream px-5 py-5 text-sm font-semibold xl:hidden"><div className="flex flex-col gap-4">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={isActive(href) ? "text-krust" : ""}>{label}</a>)}<SocialRow links={socialLinks} small /></div></nav>}
+        {menuOpen && <nav className="fade-in max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-petal bg-cream px-3 pb-5 pt-2 text-[15px] font-semibold sm:px-5 xl:hidden"><div className="mx-auto flex max-w-[1440px] flex-col">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={`flex min-h-12 items-center justify-between rounded-xl px-3 transition hover:bg-blush ${isActive(href) ? "bg-blush text-krust" : "text-ink"}`}>{label}<ArrowRight size={15} className="opacity-40" /></a>)}<div className="mt-3 border-t border-petal px-3 pt-4"><SocialRow links={socialLinks} small /></div></div></nav>}
+        {theme.id !== "none" && <HeaderDecor theme={theme} animate={config.festive.fireworks} />}
       </header>
-      {config.festive.enabled && <DiwaliGarland />}
+      {theme.id === "christmas" ? <ChristmasGarland /> : theme.id === "pongal" ? <PongalThoranam /> : theme.id !== "none" && <FestiveGarland theme={theme} />}
 
       {page === "home" ? <Hero /> : page === "product" ? null : <PageBanner page={page} />}
 
@@ -253,10 +259,10 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
       {socialLinks.whatsapp && <WhatsAppFab href={socialLinks.whatsapp} raised={cartItems > 0} />}
 
       {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_rgba(236,36,39,.14)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-5"><span className="grid h-11 w-11 place-items-center rounded-full bg-krust text-white"><ShoppingBag size={19} /></span><div><p className="text-[11px] text-cocoa">{cartItems} item{cartItems === 1 ? "" : "s"} in your basket</p><p className="font-display text-xl">{formatInr(subtotal)}</p></div></div>
+        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3 sm:gap-4">
+          <button type="button" onClick={() => setCheckoutOpen(true)} aria-label="View basket" className="flex min-w-0 items-center gap-3 text-left sm:gap-5"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-krust text-white"><ShoppingBag size={19} /></span><div className="min-w-0"><p className="truncate text-[11px] text-cocoa">{cartItems} item{cartItems === 1 ? "" : "s"} · <span className="font-bold text-krust underline underline-offset-2">View / edit</span></p><p className="font-display text-xl">{formatInr(subtotal)}</p></div></button>
           <div className="hidden text-right md:block">{subtotal < settings.minimumOrder ? <><p className="text-xs font-semibold text-krust">Add {formatInr(settings.minimumOrder - subtotal)} for delivery</p><div className="mt-1.5 h-1.5 w-48 overflow-hidden rounded-full bg-blush"><div className="h-full rounded-full bg-krust transition-all" style={{ width: `${Math.min(100, (subtotal / settings.minimumOrder) * 100)}%` }} /></div></> : <p className="flex items-center gap-2 text-xs font-semibold text-[#2f7a4a]"><Check size={14} /> Delivery minimum reached</p>}</div>
-          <button onClick={() => setCheckoutOpen(true)} disabled={subtotal < settings.minimumOrder} className="flex h-12 items-center gap-2 rounded-full bg-krust px-6 text-sm font-bold text-white transition hover:bg-krust-deep disabled:cursor-not-allowed disabled:bg-petal disabled:text-cocoa">Checkout <ArrowRight size={16} /></button>
+          <button onClick={() => setCheckoutOpen(true)} disabled={subtotal < settings.minimumOrder} className="flex h-12 shrink-0 items-center gap-2 rounded-full bg-krust px-4 text-sm font-bold text-white transition hover:bg-krust-deep disabled:cursor-not-allowed sm:px-6 disabled:bg-petal disabled:text-cocoa">Checkout <ArrowRight size={16} /></button>
         </div>
       </div>}
       {checkoutOpen && <CheckoutSheet onClose={() => setCheckoutOpen(false)} />}
@@ -455,7 +461,7 @@ function Hero() {
 function AccountButton() {
   const { customer, setAccountOpen } = useCustomerStore();
   const label = customer ? customer.name.split(" ")[0] : "Sign in";
-  return <button onClick={() => setAccountOpen(true)} aria-label={customer ? "Your account" : "Sign in"} className="flex h-11 items-center gap-2 rounded-full border-2 border-krust bg-white pl-1 pr-1 text-sm font-extrabold text-krust transition hover:bg-blush sm:pr-4">
+  return <button onClick={() => setAccountOpen(true)} aria-label={customer ? "Your account" : "Sign in"} className="flex h-10 shrink-0 items-center gap-2 rounded-full border-2 border-krust bg-white pl-0.5 pr-0.5 text-sm font-extrabold sm:h-11 sm:pl-1 text-krust transition hover:bg-blush sm:pr-4">
     {customer?.picture ? <img src={customer.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <span className="grid h-8 w-8 place-items-center rounded-full bg-blush"><UserRound size={16} /></span>}
     <span className="hidden max-w-24 truncate sm:inline">{label}</span>
   </button>;
@@ -618,6 +624,8 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
   const online = !!payments?.razorpay;
   const needsSignIn = !!settings.googleClientId;
   const clear = useCartStore((state) => state.clear);
+  const setQuantity = useCartStore((state) => state.setQuantity);
+  const removeLine = useCartStore((state) => state.remove);
   const { customer, lastDetails, refresh: refreshCustomer, setAccountOpen } = useCustomerStore();
   const [step, setStep] = useState<"details" | "success">("details");
   type Method = "RAZORPAY" | "UPI" | "ONLINE" | "PAY_ON_DELIVERY";
@@ -672,7 +680,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
     {payment === "RAZORPAY" && payState === "unpaid" && <div className="mt-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-krust/50 bg-white p-4 text-left"><p className="text-xs font-bold text-krust-deep">{payError || "The payment was not completed."}</p><p className="mt-1 text-[11px] text-cocoa">Your order is saved. You can pay now, or later from My orders.</p><button onClick={() => void pay(placed)} className="action mt-3 w-full justify-center"><CreditCard size={15} /> Pay {formatInr(placed.total)} now</button></div>}<div className="mt-7 grid w-full max-w-sm gap-3 sm:grid-cols-2">{payState === "paid" ? <button onClick={() => void downloadReceiptFor(placed.id, placed.token).catch((e: Error) => toast.error(e.message))} className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-white"><Download size={15} /> Download receipt</button> : <Link href={`/invoice/${placed.id}?t=${placed.token}`} className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink text-sm font-bold text-white">View GST invoice</Link>}<a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi Krust, I placed order ${placed.id} for ${formatInr(placed.total)}.`)}`} target="_blank" rel="noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25d366] text-sm font-bold text-white"><WhatsAppIcon size={16} /> WhatsApp</a></div></div> :
     <form key={customer?.id ?? "guest"} onSubmit={submit} className="px-5 py-7 sm:px-8">
       {!customer && needsSignIn ? null : customer ? <div className="mb-5 flex items-center gap-3 rounded-2xl bg-mint/70 p-4 text-xs font-bold text-[#2f7a4a]"><Check size={16} /> Signed in as {customer.email}. This order will appear in My orders.</div> : <button type="button" onClick={() => setAccountOpen(true)} className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-krust/40 bg-white p-4 text-left text-xs font-bold text-ink transition hover:border-krust"><span>Sign in with Google to save this order to your account <span className="block font-medium text-cocoa">Or simply continue as a guest below.</span></span><ArrowRight size={16} className="shrink-0 text-krust" /></button>}
-      <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex justify-between gap-3 text-xs"><span className="text-cocoa">{line.quantity} × {product.name} <span className="opacity-60">({variant.name})</span></span><span className="font-semibold">{formatInr(variant.price * line.quantity)}</span></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
+      <div className="rounded-2xl border-2 border-krust/70 bg-white p-5"><div className="flex items-center justify-between"><h3 className="text-xl">Your order</h3><span className="badge bg-blush text-krust">{items} items</span></div><div className="mt-4 space-y-3">{resolved.map(({ line, product, variant }) => <div key={line.key} className="flex items-center gap-3 border-b border-petal/60 pb-3 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{product.name}</p><p className="text-[11px] text-cocoa">{variant.name} · {formatInr(variant.price)}</p></div><div className="flex h-9 shrink-0 items-center rounded-full border border-petal bg-cream"><button type="button" onClick={() => setQuantity(line.productId, line.variantId, line.quantity - 1)} aria-label={`One less ${product.name}`} className="grid h-full w-8 place-items-center text-cocoa hover:text-krust"><Minus size={13} /></button><span className="w-6 text-center text-xs font-extrabold">{line.quantity}</span><button type="button" onClick={() => setQuantity(line.productId, line.variantId, Math.min(100, line.quantity + 1))} aria-label={`One more ${product.name}`} className="grid h-full w-8 place-items-center text-cocoa hover:text-krust"><Plus size={13} /></button></div><span className="w-16 shrink-0 text-right text-xs font-semibold">{formatInr(variant.price * line.quantity)}</span><button type="button" onClick={() => { removeLine(line.productId, line.variantId); toast(`${product.name} removed from basket`); }} aria-label={`Remove ${product.name}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-cocoa transition hover:bg-blush hover:text-krust"><Trash2 size={15} /></button></div>)}{!resolved.length && <p className="text-xs text-cocoa">Your basket is empty.</p>}</div><div className="mt-4 border-t border-petal pt-4"><div className="flex justify-between text-xs text-cocoa"><span>Included GST</span><span>{formatInr(gst)}</span></div>{settings.deliveryFee > 0 && <div className="mt-1 flex justify-between text-xs text-cocoa"><span>Delivery</span><span>{formatInr(settings.deliveryFee)}</span></div>}<div className="mt-2 flex justify-between"><span className="font-semibold">Total</span><span className="font-display text-2xl">{formatInr(subtotal + settings.deliveryFee)}</span></div></div></div>
       {!customer && needsSignIn ? <div className="mt-8 rounded-3xl border-2 border-krust bg-white p-6 text-center sm:p-8">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-blush text-krust"><UserRound size={24} /></span>
         <h3 className="mt-4 text-2xl">Sign in to place your order</h3>

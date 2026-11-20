@@ -8,6 +8,7 @@ import {
   type AdminAction, type AdminData, type Customer, type AdminRole, type AdminUser, type AuditEntry, type PlaceOrderInput, type PublicConfig, type StoreOrder,
 } from "@/lib/store-core";
 import type { Product } from "@/lib/types";
+import { isFestiveThemeId, themeOf } from "../festive-themes";
 
 export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -531,12 +532,12 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
     case "festive.update": {
       const f = action.festive;
       const festive = {
-        enabled: !!f.enabled, fireworks: !!f.fireworks, title: text(f.title, 60) || "Happy Diwali", subtitle: text(f.subtitle, 160),
+        enabled: !!f.enabled, fireworks: !!f.fireworks, theme: isFestiveThemeId(f.theme) ? f.theme : "none", title: text(f.title, 60) || themeOf(f.theme).defaultTitle, subtitle: text(f.subtitle, 160),
         popupDelaySeconds: Math.min(60, Math.max(0, Math.round(Number(f.popupDelaySeconds) || 0))),
         repeatMinutes: Math.min(1440, Math.max(1, Math.round(Number(f.repeatMinutes) || 10))),
       };
       next = { ...config, festive };
-      entry = ["Festive settings updated", "Hampers & fireworks", `Popup ${festive.enabled ? "on" : "off"} · Fireworks ${festive.fireworks ? "on" : "off"}`];
+      entry = ["Festive settings updated", "Hampers & fireworks", `Theme ${themeOf(festive.theme).label} · Popup ${festive.enabled ? "on" : "off"} · Fireworks ${festive.fireworks ? "on" : "off"}`];
       break;
     }
     case "branding.update": {

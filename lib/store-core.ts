@@ -1,5 +1,6 @@
 import { seedCategories, seedProducts } from "./catalog";
 import type { Product } from "./types";
+import type { FestiveThemeId } from "./festive-themes";
 
 export type StoreCategory = { id: string; name: string; active: boolean };
 export type OrderLine = { productId?: string; productName: string; variantName: string; hsn?: string; quantity: number; unitPrice: number; gstRate: number };
@@ -41,7 +42,7 @@ export type Story = {
 /** A festive gift hamper: sold as one basket item at a fixed price. */
 export type Hamper = { id: string; name: string; description: string; imageUrl: string; images?: string[]; price: number; gstRate: number; contents: string[]; badge?: string; active: boolean };
 /** Festive mode: the hamper popup and the fireworks. */
-export type Festive = { enabled: boolean; fireworks: boolean; title: string; subtitle: string; popupDelaySeconds: number; repeatMinutes: number };
+export type Festive = { enabled: boolean; fireworks: boolean; theme: FestiveThemeId; title: string; subtitle: string; popupDelaySeconds: number; repeatMinutes: number };
 export type StoreSettings = { minimumOrder: number; deliveryFee: number; gstRates: number[]; gstin: string; fssai: string; legalName: string; placeOfSupply: string; googleClientId: string };
 
 /** Catalogue and site content: everything a storefront visitor may read. */
@@ -129,7 +130,7 @@ export function seedConfig(): PublicConfig {
       { id: "diwali-mini", name: "Sweet Little Hamper", description: "A small, thoughtful treat that fits every budget.", imageUrl: "/brand/krust-hero.png", price: 599, gstRate: 5, active: true,
         contents: ["Vanilla Tea Cake (200g)", "Walnut Brownies (200g)", "Golden Krust Cakes (4 pcs)", "Festive gift pouch"] },
     ],
-    festive: { enabled: true, fireworks: true, title: "Happy Diwali", subtitle: "Light up the festival with our handcrafted gift hampers", popupDelaySeconds: 4, repeatMinutes: 10 },
+    festive: { enabled: true, fireworks: true, theme: "diwali", title: "Happy Diwali", subtitle: "Light up the festival with our handcrafted gift hampers", popupDelaySeconds: 4, repeatMinutes: 10 },
     settings: { minimumOrder: 750, deliveryFee: 0, gstRates: [0, 5, 18], gstin: "", fssai: "", legalName: "Krust Artisan Bakes", placeOfSupply: "Tamil Nadu (33)", googleClientId: "" },
     socialLinks: { instagram: "https://instagram.com/", facebook: "https://facebook.com/", twitter: "https://x.com/", whatsapp: "https://wa.me/919840477330" },
     branding: {

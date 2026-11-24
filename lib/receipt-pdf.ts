@@ -23,7 +23,7 @@ function words(n: number): string {
   return `${words(Math.floor(n / 10000000))} Crore ${words(n % 10000000)}`.trim();
 }
 
-async function imageData(url: string) {
+export async function imageData(url: string) {
   try {
     const blob = await (await fetch(url)).blob();
     const dataUrl = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = reject; r.readAsDataURL(blob); });

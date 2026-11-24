@@ -12,10 +12,10 @@ import { useCustomerStore } from "@/lib/customer-store";
 import { payOnline } from "@/lib/razorpay-client";
 import { downloadReceiptFor } from "@/lib/receipt-pdf";
 import { galleryOf, sellableCatalog, type CarouselSlide, type Hamper, type PublicConfig } from "@/lib/store-core";
-import { FestiveGarland, FestiveLayer, HamperSection } from "./festive";
-import { themeOf, themeStyle } from "@/lib/festive-themes";
-import { HeaderDecor } from "./festive-scenes";
-import { ChristmasGarland, PongalThoranam } from "./festive-intro";
+import { FestiveLayer, HamperSection } from "./festive";
+import { isFestiveThemeId, themeOf, themeStyle } from "@/lib/festive-themes";
+import { setEffectsOn, useEffectsOn } from "@/lib/effects-pref";
+import { FestiveBanner } from "./festive-banner";
 import type { Product } from "@/lib/types";
 import { AccountContent, AccountSheet, GoogleButton } from "./customer-account";
 import { PhotoCarousel } from "./photo-carousel";
@@ -33,6 +33,9 @@ const useConfig = () => useContext(ConfigContext)!;
 const noopSubscribe = () => () => {};
 /** False during SSR and hydration, true afterwards: keeps the persisted cart from causing hydration mismatches. */
 const useHydrated = () => useSyncExternalStore(noopSubscribe, () => true, () => false);
+const readPreviewTheme = () => { const id = new URLSearchParams(window.location.search).get("previewTheme"); return isFestiveThemeId(id) ? id : null; };
+/** The theme named in ?previewTheme= (browser only; null during server render). */
+const usePreviewTheme = () => useSyncExternalStore(noopSubscribe, readPreviewTheme, () => null);
 const localToday = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
 /** Cart totals against the live catalogue; lines for removed products are ignored. */
@@ -88,7 +91,11 @@ export function Storefront({ initialConfig, page = "home", initialCategory, prod
     } catch { return; }
     void fetch("/api/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitor, path: window.location.pathname }), keepalive: true }).catch(() => undefined);
   }, []);
-  return <ConfigContext.Provider value={live ?? initialConfig}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} productId={productId} /></PageContext.Provider></ConfigContext.Provider>;
+  // Admin preview (?previewTheme=spring): shows a theme in this tab only; nothing is saved.
+  const previewTheme = usePreviewTheme();
+  const base = live ?? initialConfig;
+  const config = useMemo(() => (previewTheme ? { ...base, festive: { ...base.festive, theme: previewTheme, title: "", subtitle: "", fireworks: true, intro: true } } : base), [base, previewTheme]);
+  return <ConfigContext.Provider value={config}><PageContext.Provider value={page}><StorefrontPage page={page} initialCategory={initialCategory} productId={productId} /></PageContext.Provider></ConfigContext.Provider>;
 }
 
 function StorefrontPage({ page, initialCategory, productId }: { page: StorePage; initialCategory?: string; productId?: string }) {
@@ -115,18 +122,19 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
   useScrollReveal(`${category}|${search}|${config.products.length}|${mounted}`);
 
   const theme = themeOf(config.festive.theme);
+  const effectsOn = useEffectsOn();
+  const previewTheme = usePreviewTheme();
   const pickCategory = (name: string) => { setCategory(name); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); };
   const isActive = (href: string) => (href === "/shop" && page === "shop") || (href === "/our-story" && page === "story") || (href === "/orders" && page === "orders");
 
   return (
-    <main data-festive={theme.id} style={themeStyle(theme) as React.CSSProperties} className="min-h-screen overflow-x-hidden bg-cream pb-28">
-      {theme.id !== "none" && <div className="festive-banner festive-ribbon relative overflow-hidden px-4 py-1.5 text-center text-[11px] font-extrabold uppercase tracking-[.22em] text-white sm:text-xs"><span className="relative">{theme.emoji} {config.festive.title || theme.defaultTitle} {theme.emoji}</span></div>}
+    <main data-festive={theme.id} data-effects={effectsOn ? "on" : "off"} style={themeStyle(theme) as React.CSSProperties} className="min-h-screen overflow-x-hidden bg-cream pb-28">
       {branding.announcement && <div className="bg-krust px-4 py-2 text-center text-[11px] font-semibold tracking-[.2em] text-white uppercase">{branding.announcement}</div>}
 
       <header className="sticky top-0 z-40 border-b border-petal/70 bg-cream/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-[78px] sm:gap-3 sm:px-5 lg:px-10">
           <Link href="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label={`${branding.storeName} home`}>
-            <img src={branding.logoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-contain shadow-[0_6px_18px_rgba(236,36,39,.18)] sm:h-12 sm:w-12 sm:rounded-2xl" />
+            <img src={branding.logoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-contain shadow-[0_6px_18px_color-mix(in_srgb,var(--krust-red)_18%,transparent)] sm:h-12 sm:w-12 sm:rounded-2xl" />
             <img src={branding.wordmarkUrl} alt={branding.storeName} className="h-auto w-[clamp(84px,28vw,150px)] min-w-0 max-[340px]:hidden sm:w-[178px]" />
           </Link>
           <nav className="hidden items-center gap-6 whitespace-nowrap text-[13px] font-semibold uppercase tracking-[.14em] text-cocoa xl:flex 2xl:gap-8">
@@ -136,7 +144,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
             <SocialRow links={socialLinks} className="hidden 2xl:flex" small />
             <span className="hidden sm:contents"><MyOrdersButton /></span>
             <AccountButton />
-            <button onClick={() => setCheckoutOpen(true)} aria-label="Open basket" className="relative flex h-10 items-center gap-1.5 rounded-full bg-krust px-3 text-sm sm:h-11 sm:gap-2 sm:px-5 font-semibold text-white shadow-[0_10px_26px_rgba(236,36,39,.28)] transition hover:bg-krust-deep">
+            <button onClick={() => setCheckoutOpen(true)} aria-label="Open basket" className="relative flex h-10 items-center gap-1.5 rounded-full bg-krust px-3 text-sm sm:h-11 sm:gap-2 sm:px-5 font-semibold text-white shadow-[0_10px_26px_color-mix(in_srgb,var(--krust-red)_28%,transparent)] transition hover:bg-krust-deep">
               <ShoppingBag size={17} /><span className="hidden sm:inline">Basket</span>
               {cartItems > 0 && <span key={cartItems} className="reveal rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-krust">{cartItems}</span>}
             </button>
@@ -144,9 +152,8 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
           </div>
         </div>
         {menuOpen && <nav className="fade-in max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-petal bg-cream px-3 pb-5 pt-2 text-[15px] font-semibold sm:px-5 xl:hidden"><div className="mx-auto flex max-w-[1440px] flex-col">{NAV.map(([href, label]) => <a key={href} href={href} onClick={() => setMenuOpen(false)} className={`flex min-h-12 items-center justify-between rounded-xl px-3 transition hover:bg-blush ${isActive(href) ? "bg-blush text-krust" : "text-ink"}`}>{label}<ArrowRight size={15} className="opacity-40" /></a>)}<div className="mt-3 border-t border-petal px-3 pt-4"><SocialRow links={socialLinks} small /></div></div></nav>}
-        {theme.id !== "none" && <HeaderDecor theme={theme} animate={config.festive.fireworks} />}
       </header>
-      {theme.id === "christmas" ? <ChristmasGarland /> : theme.id === "pongal" ? <PongalThoranam /> : theme.id !== "none" && <FestiveGarland theme={theme} />}
+      <FestiveBanner theme={theme} title={config.festive.title || theme.defaultTitle} subtitle={config.festive.subtitle || theme.defaultSubtitle} ctaHref={liveHampers.length ? (page === "home" || page === "shop" ? "#hampers" : "/shop#hampers") : page === "shop" ? "#menu" : "/shop"} ctaLabel={liveHampers.length ? `Shop ${theme.hamperLabel.toLowerCase()}` : "Shop now"} corner={mounted && config.festive.fireworks ? <EffectsSwitch on={effectsOn} /> : undefined} />
 
       {page === "home" ? <Hero /> : page === "product" ? null : <PageBanner page={page} />}
 
@@ -176,7 +183,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
             const Icon = categoryIcon(cat.name);
             return (
               <button key={cat.id} onClick={() => pickCategory(cat.name)} data-reveal style={{ "--reveal-delay": `${(i % 5) * 70}ms` } as React.CSSProperties} className={`lift group relative overflow-hidden rounded-[22px] border border-white p-5 text-left ${tints[i % tints.length]}`}>
-                <span className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-krust shadow-[0_6px_16px_rgba(236,36,39,.15)] transition duration-500 group-hover:rotate-12 group-hover:scale-110 group-hover:bg-krust group-hover:text-white"><Icon size={20} strokeWidth={2} /></span>
+                <span className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-krust shadow-[0_6px_16px_color-mix(in_srgb,var(--krust-red)_15%,transparent)] transition duration-500 group-hover:rotate-12 group-hover:scale-110 group-hover:bg-krust group-hover:text-white"><Icon size={20} strokeWidth={2} /></span>
                 <span className="badge bg-white/80 text-krust">{count} items</span>
                 <p className="mt-8 font-display text-xl leading-tight sm:text-2xl">{cat.name}</p>
                 <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[.16em] text-krust">Shop <ArrowRight size={13} className="transition group-hover:translate-x-1" /></span>
@@ -203,7 +210,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
           <label className="flex h-12 w-full items-center gap-3 rounded-full border border-petal bg-white px-5 shadow-sm transition focus-within:border-krust lg:w-80"><Search size={17} className="text-cocoa" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the bake…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-cocoa/60" /></label>
         </div>
         <div className="no-scrollbar mt-10 flex gap-2 overflow-x-auto pb-2">
-          {["All", ...activeCategories.map((c) => c.name)].map((item) => <button key={item} onClick={() => setCategory(item)} className={`shrink-0 rounded-full border px-5 py-2.5 text-[13px] font-semibold transition ${category === item ? "border-krust bg-krust text-white shadow-[0_8px_20px_rgba(236,36,39,.25)]" : "border-petal bg-white text-cocoa hover:border-krust hover:text-krust"}`}>{item}</button>)}
+          {["All", ...activeCategories.map((c) => c.name)].map((item) => <button key={item} onClick={() => setCategory(item)} className={`shrink-0 rounded-full border px-5 py-2.5 text-[13px] font-semibold transition ${category === item ? "border-krust bg-krust text-white shadow-[0_8px_20px_color-mix(in_srgb,var(--krust-red)_25%,transparent)]" : "border-petal bg-white text-cocoa hover:border-krust hover:text-krust"}`}>{item}</button>)}
         </div>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((product, i) => <div key={product.id} data-reveal style={{ "--reveal-delay": `${(i % 4) * 60}ms` } as React.CSSProperties}><ProductCard product={product} /></div>)}
@@ -245,7 +252,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
         <SectionHeading eyebrow="Good to know" title="Questions, answered" center />
         <div className="mt-10 space-y-3">
           {config.faqs.filter((f) => f.active).map((f) => (
-            <details key={f.id} data-reveal className="group rounded-2xl border border-petal bg-white px-6 py-5 open:border-krust open:shadow-[0_14px_40px_-20px_rgba(236,36,39,.4)]">
+            <details key={f.id} data-reveal className="group rounded-2xl border border-petal bg-white px-6 py-5 open:border-krust open:shadow-[0_14px_40px_-20px_color-mix(in_srgb,var(--krust-red)_40%,transparent)]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-xl">{f.question}<span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blush text-krust transition group-open:rotate-45"><Plus size={16} /></span></summary>
               <p className="mt-3 text-sm leading-7 text-cocoa">{f.answer}</p>
             </details>
@@ -258,7 +265,7 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
 
       {socialLinks.whatsapp && <WhatsAppFab href={socialLinks.whatsapp} raised={cartItems > 0} />}
 
-      {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_rgba(236,36,39,.14)] backdrop-blur-xl">
+      {cartItems > 0 && <div className="reveal fixed inset-x-0 bottom-0 z-40 border-t-2 border-krust bg-white/95 px-4 py-3 shadow-[0_-18px_50px_color-mix(in_srgb,var(--krust-red)_14%,transparent)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3 sm:gap-4">
           <button type="button" onClick={() => setCheckoutOpen(true)} aria-label="View basket" className="flex min-w-0 items-center gap-3 text-left sm:gap-5"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-krust text-white"><ShoppingBag size={19} /></span><div className="min-w-0"><p className="truncate text-[11px] text-cocoa">{cartItems} item{cartItems === 1 ? "" : "s"} · <span className="font-bold text-krust underline underline-offset-2">View / edit</span></p><p className="font-display text-xl">{formatInr(subtotal)}</p></div></button>
           <div className="hidden text-right md:block">{subtotal < settings.minimumOrder ? <><p className="text-xs font-semibold text-krust">Add {formatInr(settings.minimumOrder - subtotal)} for delivery</p><div className="mt-1.5 h-1.5 w-48 overflow-hidden rounded-full bg-blush"><div className="h-full rounded-full bg-krust transition-all" style={{ width: `${Math.min(100, (subtotal / settings.minimumOrder) * 100)}%` }} /></div></> : <p className="flex items-center gap-2 text-xs font-semibold text-[#2f7a4a]"><Check size={14} /> Delivery minimum reached</p>}</div>
@@ -267,9 +274,17 @@ function StorefrontPage({ page, initialCategory, productId }: { page: StorePage;
       </div>}
       {checkoutOpen && <CheckoutSheet onClose={() => setCheckoutOpen(false)} />}
       <FestiveLayer festive={config.festive} hampers={liveHampers} open={hamperOpen} setOpen={setHamperOpen} focus={hamperFocus} setFocus={setHamperFocus} raised={cartItems > 0} />
+      {previewTheme && <div className="fixed bottom-24 left-1/2 z-[85] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-full bg-ink/90 py-2 pl-4 pr-2 text-xs font-bold text-white shadow-2xl backdrop-blur"><span className="truncate">Previewing {theme.emoji} {theme.label} · only you see this</span><a href={typeof window === "undefined" ? "/" : window.location.pathname} className="shrink-0 rounded-full bg-white px-3 py-1.5 text-ink">Exit</a></div>}
       <AccountSheetHost clientId={settings.googleClientId} online={!!config.payments?.razorpay} />
     </main>
   );
+}
+
+/** Lets the visitor turn festive motion off (or back on); remembered in this browser. */
+function EffectsSwitch({ on }: { on: boolean }) {
+  return <button type="button" onClick={() => setEffectsOn(!on)} aria-pressed={!on} aria-label={on ? "Turn festive animations off" : "Turn festive animations on"} title={on ? "Turn animations off" : "Turn animations on"} className="flex items-center gap-1 rounded-full bg-black/25 px-2 py-1 text-[10px] font-bold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-black/35">
+    <Sparkles size={11} className={on ? "" : "opacity-50"} /><span className="hidden sm:inline">Effects {on ? "on" : "off"}</span>
+  </button>;
 }
 
 function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase(); }
@@ -295,7 +310,7 @@ function Reviews() {
       <div className="relative mx-auto max-w-[1280px] px-5 lg:px-10">
         <SectionHeading eyebrow="Kind words" title="Loved across Chennai" center />
         <div className="mt-12 grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
-          <div data-reveal className="relative flex flex-col justify-between overflow-hidden rounded-[32px] bg-krust p-8 text-white shadow-[0_30px_70px_-25px_rgba(236,36,39,.7)] sm:p-10">
+          <div data-reveal className="relative flex flex-col justify-between overflow-hidden rounded-[32px] bg-krust p-8 text-white shadow-[0_30px_70px_-25px_color-mix(in_srgb,var(--krust-red)_70%,transparent)] sm:p-10">
             <Quote size={120} className="absolute -right-4 -top-4 text-white/10" />
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[.24em] text-white/80">Customer rating</p>
@@ -352,7 +367,7 @@ function Footer() {
           </div>
         </div>
         <div><p className="eyebrow">Explore</p><div className="mt-5 flex flex-col gap-3 text-sm font-semibold text-cocoa">{[["/shop", "Shop the bake"], ["/#collections", "Collections"], ["/our-story", "Our story"], ["/#reviews", "Reviews"], ["#visit", "Visit us"]].map(([h, l]) => <a key={h} href={h} className="transition hover:translate-x-1 hover:text-krust">{l}</a>)}</div></div>
-        <div className="overflow-hidden rounded-[28px] border-[3px] border-krust bg-white shadow-[0_24px_60px_-30px_rgba(236,36,39,.55)]">
+        <div className="overflow-hidden rounded-[28px] border-[3px] border-krust bg-white shadow-[0_24px_60px_-30px_color-mix(in_srgb,var(--krust-red)_55%,transparent)]">
           <iframe title="Krust on Google Maps" src={mapEmbedSrc(branding.mapsEmbedUrl, branding.address)} className="h-56 w-full border-0 sm:h-64" loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-krust text-white"><MapPin size={17} /></span><div><p className="text-sm font-extrabold">Krust bakehouse</p><p className="text-xs font-medium leading-5 text-cocoa">{branding.address}</p></div></div>
@@ -440,7 +455,7 @@ function Hero() {
           <h1 className="mt-7 text-[clamp(3rem,6.5vw,6.2rem)] leading-[.95] tracking-[-.02em]">{branding.heroTitle}<br /><span className="font-hero shimmer-text inline-block pr-4 text-[clamp(4.4rem,9vw,9rem)] leading-[1.05]">{branding.heroAccent}</span></h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-cocoa">{branding.heroCopy}</p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_rgba(236,36,39,.3)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
+            <a href="#menu" className="group flex h-14 items-center gap-3 rounded-full bg-krust px-7 text-sm font-bold text-white shadow-[0_16px_40px_color-mix(in_srgb,var(--krust-red)_30%,transparent)] transition hover:bg-krust-deep">Order from today&apos;s bake <ArrowRight size={17} className="transition group-hover:translate-x-1" /></a>
             <Link href="/our-story" className="flex h-14 items-center rounded-full border-2 border-krust bg-white/70 px-7 text-sm font-bold text-krust backdrop-blur transition hover:bg-white">Meet the baker</Link>
           </div>
           <div className="mt-10 flex flex-wrap gap-2">{["No MSG", "No bromides", "Eggless options", "No artificial colours"].map((t) => <span key={t} className="badge border border-krust/20 bg-white text-krust"><Check size={12} /> {t}</span>)}</div>
@@ -692,7 +707,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
       <SectionTitle number="02" title="Delivery date" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Delivery date" name="date" type="date" min={today} defaultValue={today} required /><label className="sm:col-span-2"><span className="label">Order note / cake message</span><textarea name="note" rows={2} placeholder="Anything the baker should know?" className="input" /></label></div>
       <SectionTitle number="03" title="Payment" /><div className={`grid gap-3 ${methods.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{methods.map(([method, title, copy]) => <button type="button" key={method} onClick={() => setPayment(method)} className={`rounded-xl border-2 p-4 text-left transition ${payment === method ? "border-krust bg-blush" : "border-petal bg-white"}`}><span className="block text-xs font-bold">{title}</span><span className="mt-1 block text-[10px] text-cocoa">{copy}</span></button>)}</div>
       {error && <p className="mt-6 rounded-xl border border-krust/30 bg-blush p-4 text-xs font-semibold text-krust-deep">{error}</p>}
-      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_rgba(236,36,39,.28)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>{payment === "RAZORPAY" ? "Pay" : "Place order"} · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
+      <button type="submit" disabled={submitting || !resolved.length || subtotal < settings.minimumOrder} className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-full bg-krust text-sm font-bold text-white shadow-[0_12px_32px_color-mix(in_srgb,var(--krust-red)_28%,transparent)] transition hover:bg-krust-deep disabled:opacity-60">{submitting ? "Placing order…" : <>{payment === "RAZORPAY" ? "Pay" : "Place order"} · {formatInr(subtotal + settings.deliveryFee)} <ShieldCheck size={18} /></>}</button>
       {subtotal < settings.minimumOrder && <p className="mt-3 text-center text-xs font-semibold text-krust">Minimum order for delivery is {formatInr(settings.minimumOrder)}.</p>}
       <p className="mt-3 text-center text-[10px] leading-4 text-cocoa">By placing this order, you agree to the delivery and cancellation policy. We never store card details.{payment === "RAZORPAY" && " Payments are processed securely by Razorpay."}</p>
       </>}

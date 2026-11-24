@@ -10,7 +10,7 @@ import { ORDER_STATUSES, PAYMENT_STATUSES, ROLE_LABELS, ROLE_TABS, type AdminRol
 import type { Product, Variant } from "@/lib/types";
 import { downloadXlsx } from "@/lib/xlsx";
 import { socialIcons, socialLabels } from "./social-icons";
-import { FESTIVE_THEME_IDS, FESTIVE_THEMES, themeOf } from "@/lib/festive-themes";
+import { FESTIVE_THEME_IDS, FESTIVE_THEMES, type FestiveThemeId, themeOf, themeStyle } from "@/lib/festive-themes";
 
 type Tab = AdminTab;
 const nav: Array<[Tab, typeof LayoutDashboard]> = [["Overview", LayoutDashboard], ["Visitors", Eye], ["Orders", ClipboardList], ["Recycle bin", Trash2], ["Products", Package], ["Categories", Tags], ["Hampers", Gift], ["GST", Receipt], ["Customers & payments", Users], ["Content studio", ImageIcon], ["Social links", Share2], ["Settings", Settings], ["Admin users", ShieldCheck], ["History", FileClock]];
@@ -211,6 +211,51 @@ type Analytics = {
 };
 const PAGE_NAMES: Record<string, string> = { "/": "Home", "/shop": "Shop", "/our-story": "Our story", "/orders": "My orders", "/product": "Product pages" };
 
+/** Today in India as YYYY-MM-DD, and simple day arithmetic on such strings. */
+const istToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+const shiftDay = (day: string, n: number) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const REPORT_PRESETS: Array<[string, () => [string, string]]> = [
+  ["Last 7 days", () => [shiftDay(istToday(), -6), istToday()]],
+  ["Last 4 weeks", () => [shiftDay(istToday(), -27), istToday()]],
+  ["This month", () => [`${istToday().slice(0, 8)}01`, istToday()]],
+  ["Last month", () => { const first = `${istToday().slice(0, 8)}01`; const end = shiftDay(first, -1); return [`${end.slice(0, 8)}01`, end]; }],
+  ["Last 90 days", () => [shiftDay(istToday(), -89), istToday()]],
+];
+
+/** Dev admin: pick a date range and download a PDF of visits, weekly page views, orders and sales. */
+function ReportDownload() {
+  const branding = useAppStore((s) => s.config.branding);
+  const [[from, to], setRange] = useState<[string, string]>(REPORT_PRESETS[1][1]);
+  const [busy, setBusy] = useState(false);
+  const today = istToday();
+  const invalid = !from || !to || from > to || to > today;
+  async function download() {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/analytics?from=${from}&to=${to}`, { cache: "no-store", credentials: "same-origin" });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error ?? "Could not build the report");
+      const { downloadReportPdf } = await import("@/lib/report-pdf");
+      await downloadReportPdf(body, branding);
+      toast.success("Report downloaded");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <Panel title="Download report (PDF)">
+    <p className="-mt-2 mb-4 text-xs text-cocoa">Visitors, weekly page views, orders, revenue, best sellers, payment and status breakdowns, and the order list for any period up to a year.</p>
+    <div className="flex flex-wrap gap-2">{REPORT_PRESETS.map(([label, make]) => { const [f, t] = make(); const on = f === from && t === to; return <button key={label} type="button" onClick={() => setRange([f, t])} className={`rounded-full border px-3.5 py-1.5 text-[11px] font-bold transition ${on ? "border-krust bg-krust text-white" : "border-petal bg-white text-cocoa hover:border-krust hover:text-krust"}`}>{label}</button>; })}</div>
+    <div className="mt-4 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+      <Field label="From" type="date" value={from} max={to || today} onChange={(e) => setRange([e.target.value, to])} />
+      <Field label="To" type="date" value={to} min={from} max={today} onChange={(e) => setRange([from, e.target.value])} />
+      <button type="button" onClick={() => void download()} disabled={busy || invalid} className="action h-[2.9rem] justify-center disabled:cursor-not-allowed disabled:opacity-50"><FileText size={15} /> {busy ? "Preparing…" : "Download PDF"}</button>
+    </div>
+    {invalid && <p className="mt-2 text-[11px] font-semibold text-krust">{to > today ? "The end date can't be in the future." : "The start date must be on or before the end date."}</p>}
+  </Panel>;
+}
+
 function Visitors() {
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState("");
@@ -230,6 +275,7 @@ function Visitors() {
   const notOrdered = Math.max(0, data.last30.visitors - data.last30.customers);
   return <div className="space-y-6">
     <Header title="Visitors" copy="Each person counts once per day, however many times they visit or refresh. Signed-in customers count by their email (a different email is a different person); others by their device. Bots are left out. Updates every minute." action={<button onClick={() => downloadXlsx("krust-visitors", { "Daily visitors": data.days.map((d) => ({ Date: d.day, Visitors: d.visitors, "Page views": d.pageViews, Orders: d.orders, Revenue: d.revenue })), Pages: data.pages.map((p) => ({ Page: PAGE_NAMES[p.path] ?? p.path, Visitors: p.visitors, Views: p.views })) })} className="action secondary"><Download size={14} /> Export XL</button>} />
+    <ReportDownload />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Visitors today" value={String(data.today.visitors)} icon={Eye} tint="bg-lilac" />
       <Metric label="Orders today" value={String(data.today.orders)} icon={ShoppingBag} tint="bg-mint" />
@@ -563,23 +609,59 @@ function Hampers() {
   </div>;
 }
 
+const EFFECT_LABELS: Record<string, string> = { fireworks: "Crackers", snow: "Snowfall", confetti: "Confetti", petals: "Petals", lanterns: "Lanterns", blossoms: "Blossoms", sparkles: "Sun sparkles", leaves: "Falling leaves" };
+
+function ThemeCard({ id, selected, live, onPick }: { id: FestiveThemeId; selected: boolean; live: boolean; onPick: () => void }) {
+  const t = FESTIVE_THEMES[id];
+  const vars = themeStyle(t);
+  const swatches = [vars["--krust-red"] ?? "#ec2427", vars["--krust-petal"] ?? "#f0dcc0", vars["--krust-cream"] ?? "#fff8e7", t.gold];
+  return <div className={`group relative overflow-hidden rounded-2xl border-2 bg-white text-left transition ${selected ? "border-krust shadow-[0_12px_28px_-12px_rgba(236,36,39,.5)]" : "border-petal hover:border-krust/50"}`}>
+    <button type="button" aria-pressed={selected} onClick={onPick} className="block w-full text-left">
+      <span className="relative block h-16 overflow-hidden" style={{ backgroundImage: `linear-gradient(120deg, ${t.from}, ${t.via}, ${t.to})` }}>
+        <span className="absolute inset-0 opacity-40" style={{ backgroundImage: `radial-gradient(circle at 20% 30%, ${t.gold} 0 1.5px, transparent 2.5px), radial-gradient(circle at 70% 60%, #fff 0 1px, transparent 2px)`, backgroundSize: "28px 22px" }} />
+        <span className="absolute bottom-2 left-3 text-2xl drop-shadow">{t.emoji}</span>
+        <span className="absolute bottom-2.5 right-3 max-w-[60%] truncate font-display text-xs text-white/95">{id === "none" ? "Plain Krust" : t.defaultTitle}</span>
+      </span>
+      <span className="block p-3">
+        <span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-extrabold">{t.label}</span><span className="flex shrink-0 -space-x-1">{swatches.map((c, i) => <span key={i} className="h-3.5 w-3.5 rounded-full ring-2 ring-white" style={{ backgroundColor: c }} />)}</span></span>
+        <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-cocoa">{id === "none" ? "No decoration" : EFFECT_LABELS[t.effect]}</span>
+      </span>
+    </button>
+    <div className="pointer-events-none absolute right-2 top-2 flex gap-1">{live && <span className="badge bg-mint text-[#2f7a4a]">Live</span>}{selected && !live && <span className="badge bg-krust text-white">Selected</span>}</div>
+    {id !== "none" && <a href={`/?previewTheme=${id}`} target="_blank" rel="noreferrer" className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-extrabold text-ink opacity-90 shadow transition hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">Preview ↗</a>}
+  </div>;
+}
+
 function FestiveSettings({ festive }: { festive: Festive }) {
   const run = useDispatch();
   const [f, setF] = useState(festive);
-  return <Panel title="Festival theme, popup & animation">
-    <form onSubmit={(e) => { e.preventDefault(); void run({ type: "festive.update", festive: f }, "Festive settings saved"); }} className="space-y-4">
-      <div><span className="label">Festival theme (changes the whole storefront)</span>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{FESTIVE_THEME_IDS.map((id) => { const t = FESTIVE_THEMES[id]; const on = (f.theme ?? "diwali") === id; return <button type="button" key={id} aria-pressed={on} onClick={() => { const prev = themeOf(f.theme); setF({ ...f, theme: id, title: !f.title || f.title === prev.defaultTitle ? t.defaultTitle : f.title, subtitle: !f.subtitle || f.subtitle === prev.defaultSubtitle ? t.defaultSubtitle : f.subtitle }); }} className={`relative overflow-hidden rounded-xl border-2 p-3 text-left transition ${on ? "border-krust shadow-[0_8px_20px_-8px_rgba(236,36,39,.45)]" : "border-petal bg-white hover:border-krust/50"}`}>
-          <span className="block h-2 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${t.from}, ${t.via}, ${t.gold})` }} />
-          <span className="mt-2 flex items-center gap-2 text-sm font-extrabold"><span className="text-lg">{t.emoji}</span>{t.label}</span>
-          <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wider text-cocoa">{id === "none" ? "Plain site" : t.effect}</span>
-          {on && <span className="absolute right-2 top-3 badge bg-krust text-white">On</span>}
-        </button>; })}</div>
-        <p className="mt-2 text-[11px] text-cocoa">Pick a festival and press Save. The garland, colours, gift button and animation on the shop switch to that festival. Choose &quot;No theme&quot; to turn festive decoration off.</p>
+  const liveTheme = themeOf(festive.theme);
+  const dirty = JSON.stringify(f) !== JSON.stringify(festive);
+  const pick = (id: FestiveThemeId) => {
+    const prev = themeOf(f.theme), t = FESTIVE_THEMES[id];
+    // Swap in the new theme's default wording unless the admin wrote their own.
+    setF({ ...f, theme: id, title: !f.title || f.title === prev.defaultTitle ? t.defaultTitle : f.title, subtitle: !f.subtitle || f.subtitle === prev.defaultSubtitle ? t.defaultSubtitle : f.subtitle });
+  };
+  const group = (kind: "festival" | "season") => FESTIVE_THEME_IDS.filter((id) => FESTIVE_THEMES[id].kind === kind);
+  const cards = (ids: FestiveThemeId[]) => <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">{ids.map((id) => <ThemeCard key={id} id={id} selected={(f.theme ?? "diwali") === id} live={liveTheme.id === id} onPick={() => pick(id)} />)}</div>;
+  return <Panel title="Site theme, popup & animation">
+    <form onSubmit={(e) => { e.preventDefault(); void run({ type: "festive.update", festive: f }, "Theme settings saved"); }} className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-cream px-4 py-3 text-xs font-bold">
+        <span>Live now: <span className="text-krust">{liveTheme.emoji} {liveTheme.label}</span></span>
+        {dirty && <span className="text-cocoa">Unsaved changes. Press <b>Save &amp; go live</b> to publish.</span>}
       </div>
-      <div className="flex flex-wrap gap-6 rounded-xl bg-cream p-4"><Toggle label="Show hamper popup & section" checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} /><Toggle label={`Theme animation (${themeOf(f.theme).effect})`} checked={f.fireworks} onChange={(v) => setF({ ...f, fireworks: v })} /></div>
+      <div><p className="label">Festivals</p>{cards(group("festival"))}</div>
+      <div><p className="label">Seasons</p>{cards(group("season"))}</div>
+      <div><p className="label">Off</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"><ThemeCard id="none" selected={f.theme === "none"} live={liveTheme.id === "none"} onPick={() => pick("none")} /></div></div>
+      <p className="-mt-2 text-[11px] text-cocoa">Each theme changes the shop&apos;s colours, garland, background, gift button and animation. Use <b>Preview ↗</b> to open the shop in that theme in a new tab; only you see it, and nothing changes until you save.</p>
+      <div className="grid gap-4 rounded-xl bg-cream p-4 sm:grid-cols-3">
+        <Toggle label="Hamper popup & section" checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} />
+        <Toggle label={`Animation (${EFFECT_LABELS[themeOf(f.theme).effect] ?? "effects"})`} checked={f.fireworks} onChange={(v) => setF({ ...f, fireworks: v })} />
+        <Toggle label="Scroll intro (once per visit, skippable)" checked={f.intro !== false} onChange={(v) => setF({ ...f, intro: v })} />
+      </div>
+      <p className="-mt-3 text-[11px] text-cocoa">Visitors can always switch animations off themselves from the theme ribbon, and phones set to reduce motion never see them.</p>
       <div className="grid gap-4 sm:grid-cols-2"><Field label="Popup heading" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /><Field label="Popup message" value={f.subtitle} onChange={(e) => setF({ ...f, subtitle: e.target.value })} /><Field label="Show popup after (seconds)" type="number" min={0} max={60} value={f.popupDelaySeconds} onChange={(e) => setF({ ...f, popupDelaySeconds: Number(e.target.value) })} /><Field label="Show again after closing (minutes)" type="number" min={1} max={1440} value={f.repeatMinutes} onChange={(e) => setF({ ...f, repeatMinutes: Number(e.target.value) })} /></div>
-      <button className="action"><Sparkles size={15} /> Save festive settings</button>
+      <button disabled={!dirty} className="action disabled:cursor-not-allowed disabled:opacity-50"><Sparkles size={15} /> Save &amp; go live</button>
     </form>
   </Panel>;
 }

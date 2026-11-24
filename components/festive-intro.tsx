@@ -6,56 +6,73 @@ import type { FestiveTheme } from "@/lib/festive-themes";
 /*
  * Festival intro: the first time the visitor scrolls down a page, the page holds still while the
  * festival's character runs across the screen (Santa's sleigh, the Pongal bullock, …), then the
- * page scrolls on by itself. Also the Christmas pine garland and the Pongal thoranam strip.
+ * page scrolls on by itself. It plays once per visit, and tapping, scrolling again or Esc skips it.
+ * Also the garlands under the header for Christmas, Pongal and the four seasons.
  * Drawn in SVG, animated with CSS ("Festival intro" in globals.css).
  */
 
 const INTRO_MS: Partial<Record<FestiveTheme["id"], number>> = { christmas: 3600, pongal: 4200 };
 const SCROLL_KEYS = new Set(["ArrowDown", "PageDown", " ", "Spacebar", "End"]);
+/** Plays once per visit (browser tab session) and theme, not on every page. */
+const seenKey = (id: string) => `krust-intro-${id}`;
+const alreadySeen = (id: string) => {
+  if (new URLSearchParams(window.location.search).has("previewTheme")) return false; // admin preview: always show it
+  try { return sessionStorage.getItem(seenKey(id)) === "1"; } catch { return false; }
+};
 
 export function ScrollIntro({ theme, title, children }: { theme: FestiveTheme; title: string; children?: ReactNode }) {
-  const [phase, setPhase] = useState<"armed" | "playing" | "done">("armed");
+  // Only ever rendered in the browser (motion is off during server render), so storage is readable here.
+  const [phase, setPhase] = useState<"armed" | "playing" | "done">(() => (alreadySeen(theme.id) ? "done" : "armed"));
   const phaseRef = useRef(phase);
+  const startedAt = useRef(0);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const ms = INTRO_MS[theme.id] ?? 2800;
 
   // Hold the first downward scroll (wheel, touch swipe or keys) and start the intro instead.
   useEffect(() => {
     if (phase === "done") return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const inOverlay = (e: Event) => !!(e.target as Element | null)?.closest?.('[role="dialog"], input, textarea, select, [contenteditable="true"]');
+    const skip = () => { if (phaseRef.current === "playing" && performance.now() - startedAt.current > 500) setPhase("done"); };
     const hold = (e: Event) => {
       if (inOverlay(e)) return;
       // Only from the top of the page (e.g. not after a reload half-way down).
       if (phaseRef.current === "armed" && window.scrollY > 80) return;
       e.preventDefault();
-      if (phaseRef.current === "armed") setPhase("playing");
+      if (phaseRef.current === "armed") { startedAt.current = performance.now(); setPhase("playing"); }
+      else skip(); // scrolling again during the intro skips it
     };
     const onWheel = (e: WheelEvent) => { if (e.deltaY > 0 || phaseRef.current === "playing") hold(e); };
-    const onKey = (e: KeyboardEvent) => { if (SCROLL_KEYS.has(e.key) || (phaseRef.current === "playing" && ["ArrowUp", "PageUp", "Home"].includes(e.key))) hold(e); };
+    const onKey = (e: KeyboardEvent) => {
+      if (phaseRef.current === "playing" && e.key === "Escape") { setPhase("done"); return; }
+      if (SCROLL_KEYS.has(e.key) || (phaseRef.current === "playing" && ["ArrowUp", "PageUp", "Home"].includes(e.key))) hold(e);
+    };
     let startY = 0;
     const onTouchStart = (e: TouchEvent) => { startY = e.touches[0]?.clientY ?? 0; };
     const onTouchMove = (e: TouchEvent) => { const dy = startY - (e.touches[0]?.clientY ?? 0); if (dy > 6 || phaseRef.current === "playing") hold(e); };
+    const onPointer = () => skip();
     addEventListener("wheel", onWheel, { passive: false });
     addEventListener("keydown", onKey);
     addEventListener("touchstart", onTouchStart, { passive: true });
     addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => { removeEventListener("wheel", onWheel); removeEventListener("keydown", onKey); removeEventListener("touchstart", onTouchStart); removeEventListener("touchmove", onTouchMove); };
+    addEventListener("pointerdown", onPointer);
+    return () => { removeEventListener("wheel", onWheel); removeEventListener("keydown", onKey); removeEventListener("touchstart", onTouchStart); removeEventListener("touchmove", onTouchMove); removeEventListener("pointerdown", onPointer); };
   }, [phase]);
 
   // When the character has crossed, let go and carry the page down for the visitor.
   useEffect(() => {
     if (phase !== "playing") return;
+    try { sessionStorage.setItem(seenKey(theme.id), "1"); } catch { /* storage blocked: may replay next page */ }
     document.documentElement.dataset.festiveIntro = "playing";
     const t = setTimeout(() => {
       setPhase("done");
       requestAnimationFrame(() => window.scrollBy({ top: Math.round(innerHeight * 0.6), behavior: "smooth" }));
-    }, INTRO_MS[theme.id] ?? 2800);
+    }, ms);
     return () => { clearTimeout(t); delete document.documentElement.dataset.festiveIntro; };
-  }, [phase, theme.id]);
+  }, [phase, theme.id, ms]);
 
   if (phase !== "playing") return null;
   return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[75] overflow-hidden" style={{ "--intro-ms": `${INTRO_MS[theme.id] ?? 2800}ms` } as React.CSSProperties}>
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[75] overflow-hidden" style={{ "--intro-ms": `${ms}ms` } as React.CSSProperties}>
       <div className="intro-veil absolute inset-0" />
       {theme.id === "christmas" && <ChristmasIntro />}
       {theme.id === "pongal" && <PongalIntro />}
@@ -63,8 +80,13 @@ export function ScrollIntro({ theme, title, children }: { theme: FestiveTheme; t
       {theme.id === "eid" && <EidIntro />}
       {theme.id === "valentines" && <HeartsIntro />}
       {theme.id === "newyear" && <BalloonIntro />}
+      {theme.id === "spring" && <SpringIntro />}
+      {theme.id === "summer" && <SummerIntro />}
+      {theme.id === "autumn" && <AutumnIntro colors={theme.colors} />}
+      {theme.id === "winter" && <WinterIntro />}
       {children}
-      <div className="intro-greet festive-banner absolute left-1/2 top-[18%] whitespace-nowrap rounded-full border-2 border-(--fest-gold) px-6 py-3 font-display text-2xl text-white shadow-2xl sm:px-9 sm:text-4xl">{theme.emoji} {title} {theme.emoji}</div>
+      <div className="intro-greet festive-banner absolute left-1/2 top-[18%] max-w-[92vw] truncate rounded-full border-2 border-(--fest-gold) px-6 py-3 font-display text-2xl text-white shadow-2xl sm:px-9 sm:text-4xl">{theme.emoji} {title} {theme.emoji}</div>
+      <div className="intro-hint absolute bottom-5 left-1/2 whitespace-nowrap rounded-full bg-ink/70 px-4 py-2 text-[11px] font-bold uppercase tracking-[.16em] text-white backdrop-blur">Tap or scroll to skip</div>
     </div>
   );
 }
@@ -143,7 +165,7 @@ function ChristmasIntro() {
   </>;
 }
 
-function PineTree({ className, style }: { className?: string; style?: React.CSSProperties }) {
+export function PineTree({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <svg viewBox="0 0 80 120" className={className} style={style}>
       <rect x="35" y="96" width="10" height="20" fill="#7a4b2a" />
@@ -328,4 +350,118 @@ function HeartsIntro() {
 
 function BalloonIntro() {
   return <>{Array.from({ length: 14 }, (_, i) => <span key={i} className="intro-float absolute bottom-0 text-4xl sm:text-6xl" style={{ left: `${(i * 41) % 94}%`, animationDelay: `${(i * 120) % 1200}ms` }}>{["🎈", "🎉", "🎈", "✨"][i % 4]}</span>)}</>;
+}
+
+// ---------- Seasons ----------
+
+function Blossom({ size, color, className = "", style }: { size: number; color: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="-12 -12 24 24" className={className} style={style}>
+      {[0, 72, 144, 216, 288].map((r) => <ellipse key={r} cx="0" cy="-5.4" rx="3.9" ry="5.6" fill={color} transform={`rotate(${r})`} />)}
+      <circle r="2.4" fill="#fff4c2" /><circle r="1" fill="#e9a23b" />
+    </svg>
+  );
+}
+
+export function Butterfly({ color, className = "", style }: { color: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="-20 -16 40 32" className={className} style={style}>
+      <g className="wing-l"><path d="M-1 -2 C-8 -16 -20 -12 -17 -3 C-15 3 -6 2 -1 0 Z" fill={color} /><path d="M-1 1 C-7 3 -14 8 -10 13 C-6 15 -2 8 -1 2 Z" fill={color} opacity=".85" /></g>
+      <g className="wing-r"><path d="M1 -2 C8 -16 20 -12 17 -3 C15 3 6 2 1 0 Z" fill={color} /><path d="M1 1 C7 3 14 8 10 13 C6 15 2 8 1 2 Z" fill={color} opacity=".85" /></g>
+      <ellipse rx="1.4" ry="7" fill="#3b2a1e" /><path d="M0 -7 C-2 -11 -4 -12 -5 -13 M0 -7 C2 -11 4 -12 5 -13" stroke="#3b2a1e" strokeWidth=".8" fill="none" />
+    </svg>
+  );
+}
+
+function SpringIntro() {
+  const pinks = ["#FFB7CE", "#FF8FB1", "#FFD1E0", "#F7A8C4", "#FFFFFF"];
+  return <>
+    {Array.from({ length: 16 }, (_, i) => <Blossom key={i} size={18 + (i % 4) * 8} color={pinks[i % pinks.length]} className="intro-drift absolute" style={{ left: `${(i * 23) % 100}%`, top: `${(i * 37) % 70}%`, animationDelay: `${(i * 110) % 1200}ms` }} />)}
+    {[["#f7a8c4", "62%", 0], ["#9cd3f0", "46%", 350], ["#ffd166", "72%", 700]].map(([c, top, d]) => (
+      <div key={String(c)} className="intro-flutter absolute left-0 w-14 sm:w-20" style={{ top: String(top), animationDelay: `${d}ms` }}><Butterfly color={String(c)} className="h-auto w-full drop-shadow" /></div>
+    ))}
+  </>;
+}
+
+function SummerIntro() {
+  return <>
+    <div className="intro-sun absolute left-1/2 top-[44%] h-44 w-44 -translate-x-1/2 -translate-y-1/2 sm:h-64 sm:w-64">
+      <svg viewBox="-100 -100 200 200" className="sun-rays absolute inset-0 h-full w-full">{Array.from({ length: 16 }, (_, i) => <path key={i} d="M-6 -62 L0 -96 L6 -62 Z" fill="#ffd23f" opacity=".75" transform={`rotate(${i * 22.5})`} />)}</svg>
+      <div className="absolute inset-[22%] rounded-full bg-[radial-gradient(circle_at_40%_35%,#fff6c2,#ffd23f_55%,#f5a623)] shadow-[0_0_80px_30px_rgba(255,210,63,.55)]" />
+    </div>
+    {Array.from({ length: 12 }, (_, i) => <span key={i} className="intro-float absolute bottom-0 h-2 w-2 rounded-full bg-white shadow-[0_0_12px_4px_rgba(255,230,140,.9)]" style={{ left: `${(i * 31) % 96}%`, animationDelay: `${(i * 150) % 1500}ms` }} />)}
+  </>;
+}
+
+export function MapleLeaf({ color, className = "", style }: { color: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="-10 -11 20 22" className={className} style={style}>
+      <path d="M0 -10 L2.8 -4.2 L8.5 -6 L5.5 -0.8 L9.5 2 L3 3 L1.2 8.5 L0 4.5 L-1.2 8.5 L-3 3 L-9.5 2 L-5.5 -0.8 L-8.5 -6 L-2.8 -4.2 Z" fill={color} />
+      <path d="M0 -8 L0 10" stroke="rgba(80,35,10,.45)" strokeWidth=".7" />
+    </svg>
+  );
+}
+
+function AutumnIntro({ colors }: { colors: string[] }) {
+  return <>{Array.from({ length: 22 }, (_, i) => (
+    <div key={i} className="intro-gust absolute left-0" style={{ top: `${8 + ((i * 41) % 80)}%`, animationDelay: `${(i * 90) % 1300}ms`, width: 26 + (i % 4) * 10 }}>
+      <MapleLeaf color={colors[i % colors.length]} className="leaf-tumble h-auto w-full" style={{ animationDelay: `${i * 70}ms` }} />
+    </div>
+  ))}</>;
+}
+
+export function Snowflake({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="-12 -12 24 24" className={className} style={style}>
+      <g stroke="#fff" strokeWidth="1.6" strokeLinecap="round" fill="none">
+        {[0, 60, 120].map((r) => <path key={r} d="M0 -11 L0 11 M-3 -8 L0 -5 L3 -8 M-3 8 L0 5 L3 8" transform={`rotate(${r})`} />)}
+      </g>
+    </svg>
+  );
+}
+
+function WinterIntro() {
+  return <>
+    <div className="intro-frost absolute inset-0" />
+    {Array.from({ length: 20 }, (_, i) => <Snowflake key={i} className="intro-snowfall absolute drop-shadow-[0_0_6px_rgba(160,200,255,.9)]" style={{ left: `${(i * 29) % 98}%`, width: 16 + (i % 5) * 8, animationDelay: `${(i * 120) % 1600}ms` }} />)}
+  </>;
+}
+
+/** Garland strips for the four seasons: blossom vine, sunny bunting, leaf string and icicles. */
+export function SeasonGarland({ theme }: { theme: FestiveTheme }) {
+  const strip = "pointer-events-none relative h-14 overflow-hidden sm:h-16";
+  if (theme.id === "spring") return (
+    <div aria-hidden="true" className={strip}>
+      <svg className="absolute inset-x-0 top-0 h-12 w-full"><defs><pattern id="spring-vine" width="90" height="48" patternUnits="userSpaceOnUse">
+        <path d="M0 10 Q22 20 45 10 T90 10" stroke="#6a9a3a" strokeWidth="2" fill="none" />
+        <path d="M18 14 C14 22 18 26 22 22 C24 18 22 14 18 14 Z M66 12 C64 4 70 2 72 6 C73 10 70 12 66 12 Z" fill="#8cc152" />
+        {[[30, 15, "#ffb7ce"], [56, 9, "#ff8fb1"], [80, 14, "#ffd1e0"]].map(([x, y, c]) => <g key={String(x)} transform={`translate(${x} ${y})`}>{[0, 72, 144, 216, 288].map((r) => <ellipse key={r} cx="0" cy="-3.6" rx="2.6" ry="3.8" fill={String(c)} transform={`rotate(${r})`} />)}<circle r="1.6" fill="#fff4c2" /></g>)}
+        <path d="M45 10 L45 30" stroke="#6a9a3a" strokeWidth="1" /><g transform="translate(45 33)">{[0, 72, 144, 216, 288].map((r) => <ellipse key={r} cx="0" cy="-4" rx="3" ry="4.2" fill="#f7a8c4" transform={`rotate(${r})`} />)}<circle r="1.8" fill="#fff4c2" /></g>
+      </pattern></defs><rect width="100%" height="48" fill="url(#spring-vine)" /></svg>
+    </div>
+  );
+  if (theme.id === "summer") return (
+    <div aria-hidden="true" className={strip}>
+      <svg className="absolute inset-x-0 top-0 h-12 w-full"><defs><pattern id="summer-bunting" width="120" height="48" patternUnits="userSpaceOnUse">
+        <path d="M0 6 Q60 16 120 6" stroke="#7a6a5a" strokeWidth="1.2" fill="none" />
+        {[["#12a4b3", 4], ["#ffd23f", 34], ["#ff7a59", 64], ["#ffffff", 94]].map(([c, x], i) => { const y = 6 + Math.sin(((Number(x) + 11) / 120) * Math.PI) * 10; return <path key={i} d={`M${x} ${y - 1} L${Number(x) + 22} ${y - 1} L${Number(x) + 11} ${y + 22} Z`} fill={String(c)} stroke="rgba(0,0,0,.08)" />; })}
+      </pattern></defs><rect width="100%" height="48" fill="url(#summer-bunting)" /></svg>
+    </div>
+  );
+  if (theme.id === "autumn") return (
+    <div aria-hidden="true" className={strip}>
+      <svg className="absolute inset-x-0 top-0 h-3 w-full"><path d="M0 4 L10000 4" stroke="#8a6a4a" strokeWidth="1.5" /></svg>
+      {Array.from({ length: 20 }, (_, i) => <span key={i} className={`lantern-swing absolute top-1 ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${(i + 0.5) * 5}%`, animationDelay: `${(i * 210) % 1800}ms` }}><MapleLeaf color={theme.colors[i % theme.colors.length]} className="h-7 w-7 sm:h-8 sm:w-8" /></span>)}
+    </div>
+  );
+  if (theme.id === "winter") return (
+    <div aria-hidden="true" className={strip}>
+      <svg className="absolute inset-x-0 top-0 h-12 w-full"><defs><pattern id="icicles" width="64" height="48" patternUnits="userSpaceOnUse">
+        <rect width="64" height="5" fill="#eaf4ff" />
+        {[[2, 18], [11, 30], [19, 14], [28, 24], [37, 34], [46, 16], [55, 26]].map(([x, h]) => <path key={x} d={`M${x} 4 L${x + 7} 4 L${x + 3.5} ${h} Z`} fill="#dcecff" stroke="#b9d4f0" strokeWidth=".6" />)}
+      </pattern></defs><rect width="100%" height="48" fill="url(#icicles)" /></svg>
+      {[8, 30, 52, 74, 94].map((left, i) => <span key={left} className={`lantern-swing absolute top-6 ${i % 2 ? "max-sm:hidden" : ""}`} style={{ left: `${left}%`, animationDelay: `${i * 300}ms` }}><Snowflake className="h-6 w-6 drop-shadow-[0_0_4px_rgba(90,140,200,.8)] [&_g]:stroke-[#8fb6e0]" /></span>)}
+    </div>
+  );
+  return null;
 }

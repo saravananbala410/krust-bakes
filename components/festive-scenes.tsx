@@ -10,7 +10,6 @@ import type { FestiveTheme } from "@/lib/festive-themes";
  */
 export function FestiveScene({ theme }: { theme: FestiveTheme }) {
   switch (theme.id) {
-    case "eid": return <CrescentMoon />;
     case "holi": return <GulalBursts colors={theme.colors} />;
     case "newyear": return <Balloons colors={NEW_YEAR_COLORS} />;
     case "valentines": return <Balloons hearts colors={VALENTINE_COLORS} />;
@@ -32,7 +31,7 @@ export function HeaderDecor({ theme, animate }: { theme: FestiveTheme; animate: 
 
 // ---------- Hanging decorations from the top corners ----------
 
-function Kandil() {
+export function Kandil() {
   return (
     <svg viewBox="0 0 60 110" className="h-full w-auto">
       <line x1="30" y1="0" x2="30" y2="22" stroke="#6b5446" strokeWidth="1.5" />
@@ -44,7 +43,7 @@ function Kandil() {
   );
 }
 
-function Fanous() {
+export function Fanous() {
   return (
     <svg viewBox="0 0 60 110" className="h-full w-auto">
       <line x1="30" y1="0" x2="30" y2="20" stroke="#6b5446" strokeWidth="1.5" />
@@ -67,7 +66,8 @@ function HangingDecor({ kind }: { kind: "kandil" | "fanous" }) {
 
 // ---------- Eid: crescent moon ----------
 
-function CrescentMoon() {
+// The Eid moon now lives in the festive banner.
+export function CrescentMoon() {
   return (
     <div aria-hidden="true" className="moon-glow pointer-events-none fixed right-3 top-[22vh] z-[34] w-14 sm:right-8 sm:w-20">
       <svg viewBox="0 0 80 80" className="h-auto w-full">

@@ -532,7 +532,7 @@ export async function runAction(admin: AdminRecord, action: AdminAction) {
     case "festive.update": {
       const f = action.festive;
       const festive = {
-        enabled: !!f.enabled, fireworks: !!f.fireworks, theme: isFestiveThemeId(f.theme) ? f.theme : "none", title: text(f.title, 60) || themeOf(f.theme).defaultTitle, subtitle: text(f.subtitle, 160),
+        enabled: !!f.enabled, fireworks: !!f.fireworks, theme: isFestiveThemeId(f.theme) ? f.theme : "none", intro: f.intro !== false, title: text(f.title, 60) || themeOf(f.theme).defaultTitle, subtitle: text(f.subtitle, 160),
         popupDelaySeconds: Math.min(60, Math.max(0, Math.round(Number(f.popupDelaySeconds) || 0))),
         repeatMinutes: Math.min(1440, Math.max(1, Math.round(Number(f.repeatMinutes) || 10))),
       };

@@ -11,6 +11,7 @@ import { PhotoCarousel } from "./photo-carousel";
 import { type FestiveTheme, themeOf } from "@/lib/festive-themes";
 import { FestiveScene } from "./festive-scenes";
 import { ScrollIntro } from "./festive-intro";
+import { useEffectsOn } from "@/lib/effects-pref";
 
 // ---------- Fireworks ----------
 
@@ -139,7 +140,7 @@ export function HamperPopup({ festive, hampers, onClose, onAdded }: { festive: F
         <div className="sticky top-0 z-20 flex h-0 justify-end"><button onClick={onClose} aria-label="Close" className="mr-3 mt-3 flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white pl-3 pr-4 text-sm font-extrabold text-ink shadow-lg ring-2 ring-(--fest-gold) transition hover:bg-blush sm:h-12"><X size={20} strokeWidth={2.6} /> Close</button></div>
         <div className="relative overflow-hidden festive-banner px-6 py-7 text-white sm:px-9">
           <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 15% 30%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 80% 20%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 60% 80%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 35% 75%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "120px 90px" }} />
-          <p className="relative flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> Festive hampers</p>
+          <p className="relative flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> {themeOf(festive.theme).kind === "season" ? "Seasonal hampers" : "Festive hampers"}</p>
           <h2 className="relative mt-2 text-4xl leading-tight sm:text-5xl">{festive.title || themeOf(festive.theme).defaultTitle}</h2>
           <p className="relative mt-2 max-w-xl text-sm text-white/85">{festive.subtitle || themeOf(festive.theme).defaultSubtitle}</p>
         </div>
@@ -160,7 +161,7 @@ export function HamperSection({ festive, hampers, onOpen }: { festive: Festive; 
       <div className="relative overflow-hidden rounded-[32px] border-[3px] border-(--fest-gold) festive-banner p-6 text-white sm:p-10">
         <div className="pointer-events-none absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 20% 30%, var(--fest-gold) 0 2px, transparent 3px), radial-gradient(circle at 75% 25%, #fff 0 1.5px, transparent 2.5px)", backgroundSize: "110px 80px" }} />
         <div className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div><p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> Festive hampers</p><h2 className="mt-2 text-4xl sm:text-5xl">{festive.title || themeOf(festive.theme).defaultTitle}</h2><p className="mt-2 max-w-xl text-sm text-white/85">{festive.subtitle || themeOf(festive.theme).defaultSubtitle}</p></div>
+          <div><p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[.28em] text-(--fest-gold)"><Gift size={14} /> {themeOf(festive.theme).kind === "season" ? "Seasonal hampers" : "Festive hampers"}</p><h2 className="mt-2 text-4xl sm:text-5xl">{festive.title || themeOf(festive.theme).defaultTitle}</h2><p className="mt-2 max-w-xl text-sm text-white/85">{festive.subtitle || themeOf(festive.theme).defaultSubtitle}</p></div>
         </div>
         <div className="relative mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">{hampers.map((h) => <HamperCard key={h.id} hamper={h} onOpen={() => onOpen(h)} />)}</div>
       </div>
@@ -179,7 +180,9 @@ export function FestiveLayer({ festive, hampers, open, setOpen, focus, setFocus,
   const themed = theme.id !== "none";
   const [burst, setBurst] = useState(0);
   const live = festive.enabled && hampers.length > 0;
-  const animate = themed && festive.fireworks;
+  // Motion needs the admin's animation switch, and the visitor's (or their system's) consent.
+  const effectsOn = useEffectsOn();
+  const animate = themed && festive.fireworks && effectsOn;
   const crackers = animate && theme.effect === "fireworks";
   const celebrate = useCallback(() => { if (crackers) setBurst((b) => b + 1); }, [crackers]);
   useTapSparkles(animate, theme.colors);
@@ -203,10 +206,10 @@ export function FestiveLayer({ festive, hampers, open, setOpen, focus, setFocus,
   const close = () => { try { sessionStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* storage blocked */ } setOpen(false); setFocus(null); };
   return <>
     {crackers && <Fireworks burst={burst} colors={theme.colors} />}
-    {crackers && <AmbientFireworks colors={theme.colors} />}
+    {crackers && <AmbientFireworks everySeconds={120} colors={theme.colors} />}
     {animate && !crackers && <FallingEffect theme={theme} />}
     {animate && <FestiveScene theme={theme} />}
-    {animate && <ScrollIntro theme={theme} title={festive.title || theme.defaultTitle}>
+    {animate && festive.intro !== false && <ScrollIntro theme={theme} title={festive.title || theme.defaultTitle}>
       {(theme.id === "diwali" || theme.id === "newyear") && <Fireworks burst={1} seconds={2.4} colors={theme.colors} />}
       {theme.id === "diwali" && <div className="absolute inset-x-0 bottom-[6vh] flex justify-around px-4">{[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className={`intro-rise ${i % 2 ? "max-sm:hidden" : ""}`} style={{ animationDelay: `${i * 120}ms` }}><Diya size={72} delay={i * 150} /></span>)}</div>}
     </ScrollIntro>}
@@ -312,7 +315,7 @@ export function AmbientFireworks({ everySeconds = 60, colors }: { everySeconds?:
   return <Fireworks burst={tick} seconds={0.6} colors={colors} />;
 }
 
-type Flake = { x: number; y: number; r: number; vy: number; vx: number; spin: number; angle: number; color: string; sway: number };
+type Flake = { x: number; y: number; r: number; vy: number; vx: number; spin: number; angle: number; color: string; sway: number; flip: number };
 
 /** Gentle full-screen particles for non-cracker themes: snow, confetti, petals or floating lanterns. */
 export function FallingEffect({ theme }: { theme: FestiveTheme }) {
@@ -328,16 +331,17 @@ export function FallingEffect({ theme }: { theme: FestiveTheme }) {
     const resize = () => { canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
     resize();
     addEventListener("resize", resize);
-    // Fewer particles on small screens so phones stay smooth.
-    const count = Math.round(Math.min(70, Math.max(24, innerWidth / 22)) * (effect === "lanterns" ? 0.25 : 1));
-    const rising = effect === "lanterns";
+    // Kept light so the content stays the focus; fewer still on small screens.
+    const density = effect === "lanterns" ? 0.3 : effect === "leaves" || effect === "blossoms" ? 0.55 : effect === "sparkles" ? 0.6 : 1;
+    const count = Math.round(Math.min(44, Math.max(16, innerWidth / 34)) * density);
+    const rising = effect === "lanterns" || effect === "sparkles";
     const make = (initial: boolean): Flake => ({
       x: Math.random() * innerWidth,
       y: initial ? Math.random() * innerHeight : rising ? innerHeight + 30 : -20,
-      r: effect === "snow" ? 1.2 + Math.random() * 2.6 : effect === "lanterns" ? 7 + Math.random() * 6 : 3 + Math.random() * 3,
-      vy: rising ? -(0.25 + Math.random() * 0.4) : effect === "snow" ? 0.35 + Math.random() * 0.8 : 0.6 + Math.random() * 1.1,
+      r: effect === "snow" ? 1.2 + Math.random() * 2.6 : effect === "lanterns" ? 7 + Math.random() * 6 : effect === "leaves" ? 6 + Math.random() * 4 : effect === "blossoms" ? 4 + Math.random() * 3 : effect === "sparkles" ? 1.2 + Math.random() * 2 : 3 + Math.random() * 3,
+      vy: rising ? -(0.2 + Math.random() * 0.35) : effect === "snow" ? 0.35 + Math.random() * 0.8 : effect === "leaves" || effect === "blossoms" ? 0.45 + Math.random() * 0.7 : 0.6 + Math.random() * 1.1,
       vx: (Math.random() - 0.5) * 0.4, spin: (Math.random() - 0.5) * 0.08, angle: Math.random() * Math.PI * 2,
-      color: colors[Math.floor(Math.random() * colors.length)], sway: Math.random() * Math.PI * 2,
+      color: colors[Math.floor(Math.random() * colors.length)], sway: Math.random() * Math.PI * 2, flip: Math.random() * Math.PI * 2,
     });
     const flakes = Array.from({ length: count }, () => make(true));
     let frame = 0;
@@ -346,6 +350,26 @@ export function FallingEffect({ theme }: { theme: FestiveTheme }) {
       if (effect === "snow") { ctx.globalAlpha = 0.85; ctx.shadowColor = "rgba(120,150,190,.5)"; ctx.shadowBlur = 3; ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2); ctx.fill(); }
       else if (effect === "confetti") { ctx.globalAlpha = 0.8; ctx.fillRect(-f.r, -f.r / 2.5, f.r * 2, f.r / 1.25); }
       else if (effect === "petals") { ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.ellipse(0, 0, f.r * 1.3, f.r * 0.65, 0, 0, Math.PI * 2); ctx.fill(); }
+      else if (effect === "blossoms") {
+        // Five round petals around a pale centre, gently turning.
+        ctx.globalAlpha = 0.78;
+        for (let k = 0; k < 5; k++) { ctx.rotate((Math.PI * 2) / 5); ctx.beginPath(); ctx.ellipse(0, -f.r * 0.62, f.r * 0.42, f.r * 0.62, 0, 0, Math.PI * 2); ctx.fill(); }
+        ctx.fillStyle = "#fff4c2"; ctx.beginPath(); ctx.arc(0, 0, f.r * 0.25, 0, Math.PI * 2); ctx.fill();
+      }
+      else if (effect === "leaves") {
+        // A maple-ish leaf that tumbles (squashes on one axis as it flips).
+        ctx.scale(Math.cos(f.flip), 1); ctx.globalAlpha = 0.82; const r = f.r;
+        ctx.beginPath(); ctx.moveTo(0, -r);
+        ctx.lineTo(r * 0.28, -r * 0.42); ctx.lineTo(r * 0.85, -r * 0.6); ctx.lineTo(r * 0.55, -r * 0.08); ctx.lineTo(r * 0.95, r * 0.2);
+        ctx.lineTo(r * 0.3, r * 0.3); ctx.lineTo(r * 0.12, r * 0.85); ctx.lineTo(0, r * 0.45); ctx.lineTo(-r * 0.12, r * 0.85); ctx.lineTo(-r * 0.3, r * 0.3);
+        ctx.lineTo(-r * 0.95, r * 0.2); ctx.lineTo(-r * 0.55, -r * 0.08); ctx.lineTo(-r * 0.85, -r * 0.6); ctx.lineTo(-r * 0.28, -r * 0.42); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(90,40,10,.35)"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(0, -r * 0.8); ctx.lineTo(0, r * 1.1); ctx.stroke();
+      }
+      else if (effect === "sparkles") {
+        // Soft glowing motes drifting up, twinkling.
+        ctx.globalAlpha = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(f.flip * 2)); ctx.shadowColor = f.color; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2); ctx.fill();
+      }
       else { ctx.rotate(-f.angle); ctx.globalAlpha = 0.55; ctx.shadowColor = f.color; ctx.shadowBlur = 14; ctx.beginPath(); ctx.ellipse(0, 0, f.r * 0.8, f.r, 0, 0, Math.PI * 2); ctx.fill(); }
       ctx.restore();
     };
@@ -353,7 +377,7 @@ export function FallingEffect({ theme }: { theme: FestiveTheme }) {
       ctx.clearRect(0, 0, innerWidth, innerHeight);
       for (let i = 0; i < flakes.length; i++) {
         const f = flakes[i];
-        f.sway += 0.015; f.x += f.vx + Math.sin(f.sway) * 0.35; f.y += f.vy; f.angle += f.spin;
+        f.sway += 0.015; f.flip += 0.03; f.x += f.vx + Math.sin(f.sway) * (effect === "leaves" ? 0.7 : 0.35); f.y += f.vy; f.angle += f.spin;
         if ((!rising && f.y > innerHeight + 20) || (rising && f.y < -30) || f.x < -30 || f.x > innerWidth + 30) flakes[i] = make(false);
         draw(f);
       }
